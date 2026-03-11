@@ -213,6 +213,9 @@
 
                     <hr>
                     <h4>🔧 Ferramentas</h4>
+                    <button class="btn btn-info btn-block" id="btn-enriquecer" onclick="enriquecerDados({{ adv.id }})">
+                        <i class="fas fa-search-plus"></i> Enriquecer Dados
+                    </button>
                     <button class="btn btn-info btn-block" onclick="gerarAbordagem({{ adv.id }})">
                         <i class="fas fa-magic"></i> Gerar Abordagem
                     </button>
@@ -307,6 +310,36 @@ async function gerarAbordagem(id) {
     if (data) {
         showToast(`Abordagem gerada! Score: ${data.score}`, 'success');
         setTimeout(() => location.reload(), 1500);
+    }
+}
+
+async function enriquecerDados(id) {
+    const btn = document.getElementById('btn-enriquecer');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enriquecendo...';
+
+    try {
+        const resp = await fetch(`/api/advogado/${id}/enriquecer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+            const campos = Object.keys(data.atualizacoes || {});
+            const msg = campos.length > 0
+                ? `Dados atualizados: ${campos.join(', ')} | Score: ${data.score_anterior} → ${data.score_novo}`
+                : `Nenhuma informação nova encontrada. Score: ${data.score_novo}`;
+            showToast(msg, campos.length > 0 ? 'success' : 'info');
+            if (campos.length > 0) setTimeout(() => location.reload(), 2000);
+        } else {
+            showToast(`Erro: ${data.erro}`, 'error');
+        }
+    } catch (e) {
+        showToast(`Erro ao enriquecer: ${e.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-search-plus"></i> Enriquecer Dados';
     }
 }
 </script>

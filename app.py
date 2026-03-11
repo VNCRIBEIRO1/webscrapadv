@@ -1346,6 +1346,43 @@ def api_processar_fila():
     })
 
 
+# ─── API Enriquecimento ────────────────────────────────────
+
+@app.route("/api/advogado/<int:id>/enriquecer", methods=["POST"])
+def api_enriquecer_advogado(id):
+    """API: Enriquecer dados de um advogado especifico."""
+    try:
+        from enriquecer_advogados import enriquecer_advogado
+        resultado = enriquecer_advogado(id)
+        if resultado:
+            return jsonify({"ok": True, **resultado})
+        return jsonify({"ok": False, "erro": "Advogado não encontrado"}), 404
+    except ImportError as ie:
+        logger.error(f"Erro ao importar enriquecer_advogados: {ie}")
+        return jsonify({"ok": False, "erro": "Módulo de enriquecimento não disponível"}), 500
+    except Exception as e:
+        logger.error(f"Erro ao enriquecer advogado {id}: {e}")
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/enriquecer/todos", methods=["POST"])
+def api_enriquecer_todos():
+    """API: Enriquecer todos os advogados que precisam."""
+    try:
+        from enriquecer_advogados import enriquecer_todos
+        limite = 50
+        if request.is_json and request.json:
+            limite = request.json.get("limite", 50)
+        resultado = enriquecer_todos(limite=limite)
+        return jsonify({"ok": True, **resultado})
+    except ImportError as ie:
+        logger.error(f"Erro ao importar enriquecer_advogados: {ie}")
+        return jsonify({"ok": False, "erro": "Módulo de enriquecimento não disponível"}), 500
+    except Exception as e:
+        logger.error(f"Erro ao enriquecer todos: {e}")
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
 @app.route("/api/dashboard/stats")
 def api_stats():
     """API: Estatísticas gerais para dashboard."""
@@ -1560,4 +1597,4 @@ seed_exemplo()
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5050)
