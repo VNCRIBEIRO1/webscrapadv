@@ -137,7 +137,11 @@ def init_db():
             data_criacao TEXT DEFAULT (datetime('now')),
             data_contato TEXT,
             proxima_acao TEXT,
-            data_proxima_acao TEXT
+            data_proxima_acao TEXT,
+            cnpj TEXT,
+            valid_phone INTEGER DEFAULT 0,
+            valid_email INTEGER DEFAULT 0,
+            contact_ok INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS emails_enviados (
@@ -1431,6 +1435,123 @@ def api_limpar_banco():
     except Exception as e:
         logger.error(f"Erro ao limpar banco: {e}")
         return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+# --- API Pipeline Completo ---
+
+@app.route("/api/pipeline/processar", methods=["POST"])
+def api_pipeline_processar():
+    """API: Executar pipeline completo a partir de CSV ou lista de nomes."""
+    try:
+        from pipeline_completo import executar_pipeline, gerar_csv_exemplo, migrar_banco
+        migrar_banco()
+
+        data = request.get_json() or {}
+        nomes = data.get("nomes", [])
+        max_registros = data.get("max", None)
+        use_selenium = data.get("selenium", False)
+
+        # Se recebeu lista de nomes, gerar CSV temporario
+        if nomes:
+            import csv as csv_mod
+            import tempfile
+            csv_path = "_api_pipeline_input.csv"
+            with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv_mod.DictWriter(f, fieldnames=["nome", "oab_num"])
+                writer.writeheader()
+                for item in nomes:
+                    if isinstance(item, str):
+                        writer.writerow({"nome": item, "oab_num": ""})
+                    elif isinstance(item, dict):
+                        writer.writerow({"nome": item.get("nome", ""), "oab_num": item.get("oab_num", "")})
+        else:
+            csv_path = data.get("csv_entrada", "entrada_oab_pr.csv")
+
+        resultado = executar_pipeline(
+            csv_entrada=csv_path,
+            max_registros=max_registros,
+            use_selenium=use_selenium,
+            noise_ratio=0.10,
+            base_delay=1.5,
+        )
+
+        if resultado:
+            return jsonify({"ok": True, **resultado["stats"], "csv_saida": resultado["csv_saida"]})
+        return jsonify({"ok": False, "erro": "Nenhum resultado"}), 400
+
+    except Exception as e:
+        logger.error(f"Erro no pipeline: {e}")
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/pipeline/exemplo", methods=["POST"])
+def api_pipeline_exemplo():
+    """API: Gerar CSV de exemplo para teste do pipeline."""
+    try:
+        from pipeline_completo import gerar_csv_exemplo
+        data = request.get_json() or {}
+        n = data.get("quantidade", 20)
+        arquivo = gerar_csv_exemplo("entrada_oab_pr.csv", n)
+        return jsonify({"ok": True, "arquivo": arquivo, "quantidade": n})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/pipeline/migrar", methods=["POST"])
+def api_pipeline_migrar():
+    """API: Migrar schema do banco (adicionar colunas novas)."""
+    try:
+        from pipeline_completo import migrar_banco
+        migrar_banco()
+        return jsonify({"ok": True, "mensagem": "Schema migrado"})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/pipeline/validar-contato", methods=["POST"])
+def api_validar_contato():
+    """API: Validar telefone e/ou email de um contato."""
+    try:
+        from validador_contatos import validar_contato_completo
+        data = request.get_json() or {}
+        resultado = validar_contato_completo(
+            telefone=data.get("telefone"),
+            email=data.get("email"),
+        )
+        return jsonify({"ok": True, **resultado})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/track/open/<int:advogado_id>/<tracking_id>")
+def api_track_open(advogado_id, tracking_id):
+    """Pixel 1x1 para rastrear abertura de email."""
+    try:
+        db = get_db()
+        db.execute(
+            "INSERT INTO historico (advogado_id, acao, detalhes) VALUES (?, ?, ?)",
+            (advogado_id, "email_aberto", f"tracking_id={tracking_id}"),
+        )
+        db.execute(
+            "UPDATE advogados SET valid_email = 1, contact_ok = 1 WHERE id = ?",
+            (advogado_id,),
+        )
+        db.commit()
+    except Exception:
+        pass
+
+    # Retornar pixel 1x1 transparente (GIF)
+    pixel = (
+        b"GIF89a\x01\x00\x01\x00\x80\x00\x00"
+        b"\xff\xff\xff\x00\x00\x00!\xf9\x04"
+        b"\x00\x00\x00\x00\x00,\x00\x00\x00"
+        b"\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+    )
+    from flask import Response
+    return Response(pixel, mimetype="image/gif", headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+    })
 
 
 @app.route("/api/dashboard/stats")
