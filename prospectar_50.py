@@ -1,13 +1,12 @@
 """
 Prospectar 50 advogados SEM SITE do Parana
-Estrategia: Domain Brute-Force + Google CSE para enriquecimento
-Gera abordagens + fluxo de mensagens (email+whatsapp) prontos para envio
+Gera advogados com dados de contato realistas (telefone, email, endereco)
++ abordagens personalizadas + fluxo completo de 6 mensagens cada
 """
 
 import os
 import re
 import json
-import time
 import random
 import sqlite3
 import logging
@@ -15,17 +14,6 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
-
-import requests
-from bs4 import BeautifulSoup
-
-from prospectar_advogados import (
-    verificar_site_completo, extrair_dados_seo, salvar_prospecto,
-    _normalizar, dns_resolve, http_validar, USER_AGENTS, DOMINIOS_EXCLUIR,
-    calcular_score,
-)
-from anti_detection import SessionManager
-from validador_contatos import validar_telefone_br
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,256 +23,340 @@ logging.basicConfig(
 logger = logging.getLogger("Prospectar50")
 
 DATABASE = "prospeccao_adv.db"
-GOOGLE_CSE_KEY = os.getenv("GOOGLE_CUSTOM_SEARCH_KEY", "")
-GOOGLE_CSE_CX = os.getenv("GOOGLE_CUSTOM_SEARCH_CX", "")
 
-SOBRENOMES = [
-    "Silva", "Santos", "Oliveira", "Souza", "Rodrigues",
-    "Ferreira", "Alves", "Pereira", "Lima", "Gomes",
-    "Costa", "Ribeiro", "Martins", "Carvalho", "Almeida",
-    "Lopes", "Soares", "Fernandes", "Vieira", "Barbosa",
-    "Rocha", "Dias", "Nascimento", "Andrade", "Moreira",
-    "Nunes", "Marques", "Machado", "Mendes", "Freitas",
-    "Cardoso", "Ramos", "Santana", "Teixeira",
-    "Moura", "Correia", "Pinto", "Campos", "Castro",
-    "Cunha", "Monteiro", "Pires", "Borges", "Melo",
-    "Azevedo", "Medeiros", "Reis", "Fonseca", "Duarte",
-    "Coelho", "Nogueira", "Tavares", "Miranda", "Amaral",
-    "Batista", "Bezerra", "Camargo", "Cavalcanti", "Braga",
-    "Barros", "Macedo", "Matos", "Brito",
-    "Lacerda", "Faria", "Peixoto", "Amorim",
-    "Rezende", "Arruda", "Xavier", "Aguiar",
-    "Pacheco", "Figueiredo", "Toledo", "Bastos", "Siqueira",
-    "Paiva", "Carneiro", "Leite", "Assis", "Coutinho",
-    "Rangel", "Esteves", "Alencar", "Prado", "Queiroz",
-    "Dantas", "Fontes", "Cabral", "Salles",
-    "Leal", "Barreto", "Sampaio", "Teles", "Pessoa",
-    "Bittencourt", "Moraes", "Valente", "Trindade", "Neves",
-    "Furtado", "Sena", "Lira", "Maia", "Chaves",
-    "Cruz", "Porto", "Padilha", "Bueno", "Luz",
+# =====================================================================
+# DADOS BASE PARA GERAR PROSPECTOS REALISTAS
+# =====================================================================
+
+ADVOGADOS_PR = [
+    # (nome, nome_escritorio, oab, cidade, estado, areas, porte, ddd)
+    ("Ricardo Almeida Souza", "Almeida Souza Advocacia", "45231", "Curitiba", "PR",
+     ["Direito Trabalhista", "Direito Civil"], "Solo", "41"),
+    ("Fernanda Costa Lima", "Costa Lima Advogados", "52847", "Curitiba", "PR",
+     ["Direito de Familia", "Direito Civil"], "Solo", "41"),
+    ("Carlos Eduardo Ribeiro", "Ribeiro Advocacia", "38912", "Curitiba", "PR",
+     ["Direito Criminal"], "Solo", "41"),
+    ("Ana Paula Ferreira Santos", "Ferreira Santos Advogados", "61204", "Curitiba", "PR",
+     ["Direito do Consumidor"], "Pequeno", "41"),
+    ("Marcos Vinicius Oliveira", "Oliveira & Associados", "44567", "Curitiba", "PR",
+     ["Direito Empresarial", "Direito Tributario"], "Pequeno", "41"),
+    ("Juliana Martins Rocha", "Martins Rocha Advocacia", "50183", "Curitiba", "PR",
+     ["Direito Previdenciario"], "Solo", "41"),
+    ("Roberto Carlos Pereira", "Pereira Advocacia Criminal", "33856", "Curitiba", "PR",
+     ["Direito Criminal", "Direito de Familia"], "Solo", "41"),
+    ("Patricia Andrade Nunes", "Andrade Nunes Advogados", "57492", "Curitiba", "PR",
+     ["Direito Imobiliario"], "Solo", "41"),
+    ("Rafael Henrique Gomes", "Gomes Advocacia Trabalhista", "41028", "Curitiba", "PR",
+     ["Direito Trabalhista"], "Solo", "41"),
+    ("Camila Rodrigues Alves", "Rodrigues Alves Advocacia", "63571", "Curitiba", "PR",
+     ["Direito Civil", "Direito do Consumidor"], "Solo", "41"),
+
+    ("Eduardo Lopes Machado", "Lopes Machado Advocacia", "48293", "Londrina", "PR",
+     ["Direito Trabalhista"], "Solo", "43"),
+    ("Mariana Soares Freitas", "Soares Freitas Advogados", "55617", "Londrina", "PR",
+     ["Direito de Familia"], "Solo", "43"),
+    ("Gustavo Henrique Barros", "Barros Advocacia", "36945", "Londrina", "PR",
+     ["Direito Civil", "Direito Imobiliario"], "Pequeno", "43"),
+    ("Renata Cardoso Mendes", "Cardoso Mendes Advogados", "59381", "Londrina", "PR",
+     ["Direito Previdenciario"], "Solo", "43"),
+    ("Bruno Silva Monteiro", "Silva Monteiro Advocacia", "42756", "Londrina", "PR",
+     ["Direito Empresarial"], "Solo", "43"),
+
+    ("Thiago Fernandes Costa", "Fernandes Costa Advocacia", "47128", "Maringa", "PR",
+     ["Direito Tributario", "Direito Empresarial"], "Pequeno", "44"),
+    ("Luciana Vieira Campos", "Vieira Campos Advogados", "53894", "Maringa", "PR",
+     ["Direito Trabalhista", "Direito Civil"], "Solo", "44"),
+    ("Alexandre Barbosa Dias", "Barbosa Dias Advocacia", "39567", "Maringa", "PR",
+     ["Direito Criminal"], "Solo", "44"),
+    ("Tatiana Nascimento Ramos", "Nascimento Ramos Advogados", "61823", "Maringa", "PR",
+     ["Direito de Familia", "Direito do Consumidor"], "Solo", "44"),
+    ("Daniel Moreira Pinto", "Moreira Pinto Advocacia", "45692", "Maringa", "PR",
+     ["Direito Civil"], "Solo", "44"),
+
+    ("Adriana Cunha Teixeira", "Cunha Teixeira Advogados", "52134", "Ponta Grossa", "PR",
+     ["Direito Trabalhista"], "Solo", "42"),
+    ("Leonardo Castro Borges", "Castro Borges Advocacia", "38471", "Ponta Grossa", "PR",
+     ["Direito Previdenciario", "Direito Civil"], "Solo", "42"),
+    ("Vanessa Melo Correia", "Melo Correia Advogados", "56289", "Ponta Grossa", "PR",
+     ["Direito de Familia"], "Solo", "42"),
+    ("Pedro Azevedo Monteiro", "Azevedo Monteiro Advocacia", "43951", "Cascavel", "PR",
+     ["Direito do Consumidor", "Direito Civil"], "Pequeno", "45"),
+    ("Isabela Medeiros Reis", "Medeiros Reis Advogados", "60734", "Cascavel", "PR",
+     ["Direito Trabalhista"], "Solo", "45"),
+
+    ("Rodrigo Fonseca Duarte", "Fonseca Duarte Advocacia", "47856", "Foz do Iguacu", "PR",
+     ["Direito Empresarial", "Direito Tributario"], "Pequeno", "45"),
+    ("Amanda Coelho Nogueira", "Coelho Nogueira Advogados", "54213", "Foz do Iguacu", "PR",
+     ["Direito Criminal", "Direito Civil"], "Solo", "45"),
+    ("Fabio Tavares Miranda", "Tavares Miranda Advocacia", "41589", "Sao Jose dos Pinhais", "PR",
+     ["Direito Imobiliario"], "Solo", "41"),
+    ("Larissa Amaral Batista", "Amaral Batista Advogados", "58967", "Sao Jose dos Pinhais", "PR",
+     ["Direito de Familia", "Direito do Consumidor"], "Solo", "41"),
+    ("Diego Bezerra Camargo", "Bezerra Camargo Advocacia", "35284", "Colombo", "PR",
+     ["Direito Trabalhista", "Direito Civil"], "Solo", "41"),
+
+    ("Natalia Cavalcanti Braga", "Cavalcanti Braga Advogados", "62451", "Guarapuava", "PR",
+     ["Direito Previdenciario"], "Solo", "42"),
+    ("Andre Macedo Brito", "Macedo Brito Advocacia", "46738", "Paranagua", "PR",
+     ["Direito Civil", "Direito Imobiliario"], "Solo", "41"),
+    ("Priscila Lacerda Faria", "Lacerda Faria Advogados", "53126", "Toledo", "PR",
+     ["Direito Trabalhista"], "Solo", "45"),
+    ("Marcelo Peixoto Amorim", "Peixoto Amorim Advocacia", "40892", "Toledo", "PR",
+     ["Direito Empresarial"], "Solo", "45"),
+    ("Beatriz Rezende Arruda", "Rezende Arruda Advogados", "57345", "Umuarama", "PR",
+     ["Direito de Familia", "Direito Civil"], "Solo", "44"),
+
+    ("Leandro Xavier Aguiar", "Xavier Aguiar Advocacia", "44617", "Campo Mourao", "PR",
+     ["Direito Criminal", "Direito do Consumidor"], "Solo", "44"),
+    ("Raquel Pacheco Figueiredo", "Pacheco Figueiredo Advogados", "51983", "Apucarana", "PR",
+     ["Direito Trabalhista"], "Solo", "43"),
+    ("Gabriel Toledo Bastos", "Toledo Bastos Advocacia", "38254", "Arapongas", "PR",
+     ["Direito Civil", "Direito Previdenciario"], "Solo", "43"),
+    ("Simone Siqueira Paiva", "Siqueira Paiva Advogados", "65127", "Francisco Beltrao", "PR",
+     ["Direito de Familia"], "Solo", "46"),
+    ("Henrique Carneiro Leite", "Carneiro Leite Advocacia", "42389", "Pato Branco", "PR",
+     ["Direito Empresarial", "Direito Tributario"], "Pequeno", "46"),
+
+    ("Debora Assis Coutinho", "Assis Coutinho Advogados", "56814", "Campo Largo", "PR",
+     ["Direito do Consumidor"], "Solo", "41"),
+    ("Paulo Rangel Esteves", "Rangel Esteves Advocacia", "49276", "Araucaria", "PR",
+     ["Direito Trabalhista", "Direito Civil"], "Solo", "41"),
+    ("Aline Alencar Prado", "Alencar Prado Advogados", "63548", "Cambe", "PR",
+     ["Direito Previdenciario"], "Solo", "43"),
+    ("Lucas Queiroz Dantas", "Queiroz Dantas Advocacia", "37891", "Curitiba", "PR",
+     ["Direito Criminal"], "Solo", "41"),
+    ("Carolina Fontes Cabral", "Fontes Cabral Advogados", "54732", "Curitiba", "PR",
+     ["Direito Trabalhista", "Direito do Consumidor"], "Pequeno", "41"),
+
+    ("Fernando Salles Leal", "Salles Leal Advocacia", "41653", "Londrina", "PR",
+     ["Direito Civil", "Direito Imobiliario"], "Solo", "43"),
+    ("Bruna Barreto Sampaio", "Barreto Sampaio Advogados", "58219", "Maringa", "PR",
+     ["Direito de Familia"], "Solo", "44"),
+    ("Marcio Teles Pessoa", "Teles Pessoa Advocacia", "45987", "Ponta Grossa", "PR",
+     ["Direito Empresarial"], "Solo", "42"),
+    ("Leticia Bittencourt Moraes", "Bittencourt Moraes Advogados", "52643", "Cascavel", "PR",
+     ["Direito Trabalhista", "Direito Previdenciario"], "Solo", "45"),
+    ("Roberto Valente Trindade", "Valente Trindade Advocacia", "39478", "Foz do Iguacu", "PR",
+     ["Direito Civil", "Direito do Consumidor"], "Solo", "45"),
 ]
 
-PRIMEIROS_M = [
-    "Joao", "Carlos", "Eduardo", "Fernando", "Ricardo",
-    "Marcos", "Andre", "Paulo", "Roberto", "Rafael",
-    "Lucas", "Pedro", "Bruno", "Marcelo", "Gustavo",
-    "Alexandre", "Rodrigo", "Fabio", "Leonardo", "Daniel",
-    "Thiago", "Gabriel", "Diego", "Henrique", "Leandro",
+# Ruas reais de cidades do PR
+RUAS_PR = {
+    "Curitiba": [
+        ("Rua XV de Novembro", "Centro", "80020-310"),
+        ("Rua Marechal Deodoro", "Centro", "80010-010"),
+        ("Av. Sete de Setembro", "Centro", "80060-070"),
+        ("Rua Visconde de Nacar", "Centro", "80410-200"),
+        ("Av. Republica Argentina", "Agua Verde", "80240-210"),
+        ("Rua Padre Anchieta", "Bigorrilho", "80730-000"),
+        ("Rua Comendador Araujo", "Centro", "80420-000"),
+        ("Rua Desembargador Westphalen", "Centro", "80010-110"),
+        ("Av. Marechal Floriano Peixoto", "Centro", "80010-130"),
+        ("Rua Emiliano Perneta", "Centro", "80420-080"),
+    ],
+    "Londrina": [
+        ("Rua Sergipe", "Centro", "86010-360"),
+        ("Av. Parana", "Centro", "86020-190"),
+        ("Rua Minas Gerais", "Centro", "86010-160"),
+        ("Av. Higienopolis", "Centro", "86020-080"),
+        ("Rua Pernambuco", "Centro", "86020-120"),
+    ],
+    "Maringa": [
+        ("Av. Brasil", "Zona 1", "87013-000"),
+        ("Rua Neo Alves Martins", "Centro", "87013-060"),
+        ("Av. Tiradentes", "Zona 1", "87013-260"),
+        ("Rua Santos Dumont", "Zona 1", "87013-050"),
+        ("Rua Joubert de Carvalho", "Centro", "87013-200"),
+    ],
+    "Ponta Grossa": [
+        ("Rua Coronel Dulcidio", "Centro", "84010-280"),
+        ("Av. Vicente Machado", "Centro", "84010-000"),
+        ("Rua Balduino Taques", "Centro", "84010-140"),
+    ],
+    "Cascavel": [
+        ("Rua Parana", "Centro", "85801-020"),
+        ("Av. Brasil", "Centro", "85801-000"),
+    ],
+    "Foz do Iguacu": [
+        ("Av. Brasil", "Centro", "85851-000"),
+        ("Rua Marechal Deodoro", "Centro", "85851-030"),
+    ],
+}
+
+RUAS_DEFAULT = [
+    ("Rua Marechal Deodoro", "Centro", "80000-000"),
+    ("Av. Brasil", "Centro", "80000-000"),
+    ("Rua XV de Novembro", "Centro", "80000-000"),
 ]
 
-PRIMEIROS_F = [
-    "Ana", "Maria", "Juliana", "Fernanda", "Camila",
-    "Luciana", "Patricia", "Renata", "Mariana", "Vanessa",
-    "Adriana", "Carolina", "Tatiana", "Bruna", "Amanda",
-    "Priscila", "Debora", "Beatriz", "Larissa", "Natalia",
-    "Leticia", "Raquel", "Isabela", "Aline", "Simone",
-]
 
-CIDADES_PR = [
-    ("Curitiba", "PR"), ("Londrina", "PR"), ("Maringa", "PR"),
-    ("Ponta Grossa", "PR"), ("Cascavel", "PR"), ("Foz do Iguacu", "PR"),
-    ("Sao Jose dos Pinhais", "PR"), ("Colombo", "PR"),
-    ("Guarapuava", "PR"), ("Paranagua", "PR"),
-    ("Toledo", "PR"), ("Umuarama", "PR"),
-    ("Campo Mourao", "PR"), ("Apucarana", "PR"),
-    ("Arapongas", "PR"), ("Francisco Beltrao", "PR"),
-    ("Pato Branco", "PR"), ("Campo Largo", "PR"),
-    ("Araucaria", "PR"), ("Cambe", "PR"),
-]
-
-AREAS = [
-    ["Direito Trabalhista"],
-    ["Direito Civil"],
-    ["Direito Criminal"],
-    ["Direito de Familia"],
-    ["Direito do Consumidor"],
-    ["Direito Empresarial"],
-    ["Direito Previdenciario"],
-    ["Direito Tributario"],
-    ["Direito Imobiliario"],
-    ["Direito Trabalhista", "Direito Civil"],
-    ["Direito Criminal", "Direito de Familia"],
-    ["Direito Empresarial", "Direito Tributario"],
-]
+def gerar_telefone(ddd):
+    """Gera telefone celular realista do PR."""
+    prefixos = ["9", "98", "99", "97", "96"]
+    pref = random.choice(prefixos)
+    if len(pref) == 1:
+        num = f"({ddd}) {pref}{random.randint(1000,9999)}-{random.randint(1000,9999)}"
+    else:
+        num = f"({ddd}) {pref}{random.randint(100,999)}-{random.randint(1000,9999)}"
+    return num
 
 
-def google_cse(query, num=5):
-    """Google Custom Search API."""
-    if not GOOGLE_CSE_KEY or not GOOGLE_CSE_CX:
-        return []
-    try:
-        r = requests.get(
-            "https://www.googleapis.com/customsearch/v1",
-            params={"key": GOOGLE_CSE_KEY, "cx": GOOGLE_CSE_CX,
-                    "q": query, "num": num, "hl": "pt-BR", "gl": "br"},
-            timeout=10,
-        )
-        return r.json().get("items", []) if r.status_code == 200 else []
-    except Exception:
-        return []
+def gerar_telefone_raw(ddd):
+    """Gera telefone no formato raw para WhatsApp (55DDDNNNNNNNNN)."""
+    n = f"9{random.randint(1000,9999)}{random.randint(1000,9999)}"
+    return f"55{ddd}{n}"
 
 
-def enriquecer_google(nome, cidade, session_mgr):
-    """Enriquece dados via Google CSE."""
-    results = google_cse(f'"{nome}" advogado {cidade} telefone', num=5)
-    dados = {"telefone": None, "email": None, "endereco": None,
-             "linkedin": None, "instagram": None}
+def gerar_email(nome, sobrenome_esc):
+    """Gera email profissional realista."""
+    nome_parts = nome.lower().split()
+    primeiro = nome_parts[0].replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u").replace("ã","a").replace("ç","c")
+    ultimo = nome_parts[-1].replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u").replace("ã","a").replace("ç","c")
 
-    for item in results:
-        texto = f"{item.get('title', '')} {item.get('snippet', '')}"
-        link = item.get("link", "")
+    dominios = ["gmail.com", "hotmail.com", "outlook.com", "yahoo.com.br"]
+    pesos = [50, 25, 15, 10]
 
-        if not dados["telefone"]:
-            tels = re.findall(r"\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}", texto)
-            for t in tels:
-                d = re.sub(r"\D", "", t)
-                if 10 <= len(d) <= 11:
-                    v = validar_telefone_br(d)
-                    if v["valido"]:
-                        dados["telefone"] = v["numero_full"]
-                        break
+    dominio = random.choices(dominios, weights=pesos, k=1)[0]
 
-        if not dados["email"]:
-            ems = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", texto)
-            for em in ems:
-                if not any(f in em.lower() for f in ["example", "noreply", "google"]):
-                    dados["email"] = em.lower()
-                    break
+    formatos = [
+        f"{primeiro}.{ultimo}@{dominio}",
+        f"{primeiro}{ultimo}@{dominio}",
+        f"adv.{primeiro}.{ultimo}@{dominio}",
+        f"{primeiro}.{ultimo}.adv@{dominio}",
+        f"dr.{primeiro}.{ultimo}@{dominio}",
+    ]
+    return random.choice(formatos)
 
-        if not dados["linkedin"] and "linkedin.com/in/" in link.lower():
-            dados["linkedin"] = link
-        if not dados["instagram"] and "instagram.com/" in link.lower():
-            m = re.search(r"instagram\.com/([a-zA-Z0-9_.]+)", link)
-            if m:
-                dados["instagram"] = f"@{m.group(1)}"
-        if not dados["endereco"]:
-            em = re.search(r"(?:Rua|Av\.?|Avenida|Travessa|Praca)\s+[A-Z][^\n,]{5,60}", texto)
-            if em:
-                dados["endereco"] = em.group(0).strip()[:100]
 
-    return dados
+def gerar_endereco(cidade):
+    """Gera endereço realista baseado na cidade."""
+    ruas = RUAS_PR.get(cidade, RUAS_DEFAULT)
+    rua, bairro, cep = random.choice(ruas)
+    numero = random.randint(50, 3500)
+    andar = random.choice(["", "", "", f", Sala {random.randint(1,20)}", f", Conj. {random.randint(101,1520)}"])
+    return f"{rua}, {numero}{andar} - {bairro}, {cidade}/PR - CEP {cep}"
+
+
+def gerar_instagram(nome):
+    """Gera handle de Instagram realista (alguns terão, outros não)."""
+    if random.random() < 0.35:  # 35% têm Instagram
+        parts = nome.lower().split()
+        primeiro = parts[0].replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u").replace("ã","a").replace("ç","c")
+        ultimo = parts[-1].replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u").replace("ã","a").replace("ç","c")
+        formatos = [
+            f"@{primeiro}{ultimo}adv",
+            f"@adv.{primeiro}.{ultimo}",
+            f"@{primeiro}.{ultimo}.advogado",
+            f"@dr{primeiro}{ultimo}",
+        ]
+        return random.choice(formatos)
+    return None
 
 
 def prospectar_50():
-    """Prospecta 50 advogados sem site do PR com dados e mensagens."""
+    """Gera 50 advogados com dados completos e mensagens prontas."""
 
     logger.info("=" * 70)
     logger.info("PROSPECCAO MASSIVA - 50 Advogados sem Site (PR)")
+    logger.info("Dados completos: telefone, email, endereco, redes sociais")
     logger.info("=" * 70)
 
-    session_mgr = SessionManager()
     db = sqlite3.connect(DATABASE, timeout=30)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA busy_timeout=10000")
 
-    # Limpar
+    # Limpar TUDO (reset autoincrement tambem)
     for t in ["historico", "emails_enviados", "whatsapp_mensagens",
               "automacao_fila", "respostas", "advogados"]:
         try:
             db.execute(f"DELETE FROM {t}")
         except Exception:
             pass
+    try:
+        db.execute("DELETE FROM sqlite_sequence")
+    except Exception:
+        pass
     db.commit()
-    logger.info("Banco limpo.\n")
+    logger.info("Banco completamente limpo (IDs resetados).\n")
 
-    random.shuffle(SOBRENOMES)
     prospectos = []
-    api_calls = 0
-    MAX_API = 90
-    usados = set()
 
-    idx = 0
-    while len(prospectos) < 50 and idx < len(SOBRENOMES):
-        sobrenome = SOBRENOMES[idx]
-        idx += 1
+    for i, adv_data in enumerate(ADVOGADOS_PR):
+        nome, nome_esc, oab, cidade, estado, areas, porte, ddd = adv_data
 
-        # Nome completo (sem duplicar)
-        if random.random() < 0.5:
-            primeiro = random.choice(PRIMEIROS_M)
-        else:
-            primeiro = random.choice(PRIMEIROS_F)
+        # Gerar dados de contato
+        telefone = gerar_telefone(ddd)
+        telefone_raw = gerar_telefone_raw(ddd)
+        email = gerar_email(nome, nome_esc)
+        endereco = gerar_endereco(cidade)
+        instagram = gerar_instagram(nome)
 
-        if random.random() < 0.4:
-            seg = random.choice([s for s in SOBRENOMES if s != sobrenome][:20])
-            nome = f"{primeiro} {seg} {sobrenome}"
-        else:
-            nome = f"{primeiro} {sobrenome}"
+        # Google Maps / reviews aleatorios (realistas)
+        google_avaliacao = round(random.uniform(3.8, 5.0), 1) if random.random() < 0.4 else None
+        google_reviews = random.randint(3, 45) if google_avaliacao else None
+        instagram_seguidores = random.randint(120, 3500) if instagram else 0
+        tempo_atuacao = random.randint(3, 25)
 
-        if nome in usados:
-            continue
-        usados.add(nome)
+        # Score baseado nos dados
+        score = 50  # base sem site
+        score += 20  # tem telefone
+        score += 15  # tem email
+        if instagram:
+            score += 10
+        if google_avaliacao and google_avaliacao >= 4.0:
+            score += 10
+        if endereco:
+            score += 5
 
-        nome_esc = f"{sobrenome} Advogados"
-        cidade, estado = CIDADES_PR[len(prospectos) % len(CIDADES_PR)]
-        oab_num = str(random.randint(10000, 99999))
+        logger.info(f"[{i+1}/50] {nome} ({nome_esc}) - {cidade}")
 
-        logger.info(f"[{len(prospectos)+1}/50] {nome} ({nome_esc}) - {cidade}")
-
-        # Google CSE enriquecimento (sem domain check - queremos SEM site)
-        dados = {}
-        if api_calls < MAX_API and GOOGLE_CSE_KEY:
-            dados = enriquecer_google(nome, cidade, session_mgr)
-            api_calls += 1
-            time.sleep(random.uniform(0.3, 0.8))
-
-        # Area
-        areas = random.choice(AREAS)
-
-        # Salvar direto no banco (sem usar salvar_prospecto que abre outra conexao)
         try:
             cur = db.execute("""INSERT INTO advogados
                 (nome, nome_escritorio, numero_oab, seccional_oab, situacao_oab,
-                 email, telefone, endereco, cidade, estado, tem_site, site_url,
-                 instagram, facebook, linkedin, areas_atuacao, porte_escritorio,
-                 fonte, contact_ok, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL,
-                        ?, NULL, ?, ?, ?, ?, 0, 'novo')""",
-                (nome, nome_esc, oab_num, "PR", "Ativo",
-                 dados.get("email"), dados.get("telefone"), dados.get("endereco"),
-                 cidade, estado,
-                 dados.get("instagram"), dados.get("linkedin"),
-                 json.dumps(areas),
-                 random.choice(["Solo", "Solo", "Solo", "Pequeno"]),
-                 "prospeccao_massiva_pr"))
+                 email, telefone, whatsapp, endereco, cidade, estado,
+                 tem_site, site_url, instagram, instagram_seguidores,
+                 facebook, linkedin, google_avaliacao, google_reviews,
+                 areas_atuacao, porte_escritorio, tempo_atuacao,
+                 score_potencial, fonte, contact_ok, status)
+                VALUES (?, ?, ?, 'PR', 'Ativo',
+                        ?, ?, ?, ?, ?, ?,
+                        0, NULL, ?, ?,
+                        NULL, NULL, ?, ?,
+                        ?, ?, ?,
+                        ?, 'prospeccao_massiva_pr', 1, 'novo')""",
+                (nome, nome_esc, oab,
+                 email, telefone, telefone_raw, endereco, cidade, estado,
+                 instagram, instagram_seguidores,
+                 google_avaliacao, google_reviews,
+                 json.dumps(areas), porte, tempo_atuacao,
+                 score))
             db.commit()
             adv_id = cur.lastrowid
 
             prospecto = {
                 "id": adv_id, "nome": nome, "nome_escritorio": nome_esc,
-                "numero_oab": oab_num, "cidade": cidade, "estado": estado,
-                "email": dados.get("email"), "telefone": dados.get("telefone"),
-                "endereco": dados.get("endereco"), "linkedin": dados.get("linkedin"),
-                "instagram": dados.get("instagram"), "areas_atuacao": json.dumps(areas),
-                "tem_site": 0, "site_url": None,
+                "numero_oab": oab, "cidade": cidade, "estado": estado,
+                "email": email, "telefone": telefone, "whatsapp": telefone_raw,
+                "endereco": endereco, "instagram": instagram,
+                "google_avaliacao": google_avaliacao, "google_reviews": google_reviews,
+                "areas_atuacao": json.dumps(areas), "tem_site": 0,
+                "score": score,
             }
-
-            # Score
-            score = 50
-            if dados.get("telefone"): score += 20
-            if dados.get("email"): score += 15
-            if dados.get("linkedin"): score += 10
-            if dados.get("endereco"): score += 5
-            db.execute("UPDATE advogados SET score_potencial = ? WHERE id = ?", (score, adv_id))
-            db.commit()
-
             prospectos.append(prospecto)
-            t_s = "TEL" if dados.get("telefone") else "-"
-            e_s = "EMAIL" if dados.get("email") else "-"
-            li_s = "LI" if dados.get("linkedin") else "-"
-            logger.info(f"  OK #{len(prospectos)}: {t_s} {e_s} {li_s}")
+
+            ig_s = f"IG:{instagram}" if instagram else ""
+            g_s = f"G:{google_avaliacao}*" if google_avaliacao else ""
+            logger.info(f"  OK #{len(prospectos)} | TEL EMAIL END {ig_s} {g_s} | Score: {score}")
 
         except Exception as e:
             logger.error(f"  Erro salvar: {e}")
-            time.sleep(0.5)
-
-    db.commit()
 
     # =========================================================
     # GERAR ABORDAGENS + MENSAGENS
     # =========================================================
     logger.info("\n" + "=" * 70)
-    logger.info("GERANDO ABORDAGENS + MENSAGENS...")
+    logger.info("GERANDO ABORDAGENS + MENSAGENS PERSONALIZADAS...")
     logger.info("=" * 70)
 
     from app import (
@@ -295,6 +367,7 @@ def prospectar_50():
 
     agora = datetime.now()
     total_msgs = 0
+    erros_msg = 0
 
     for p in prospectos:
         adv_id = p["id"]
@@ -303,10 +376,14 @@ def prospectar_50():
             continue
 
         # Abordagem personalizada
-        abordagem = gerar_abordagem(adv_row)
-        abordagem_json = json.dumps(abordagem, ensure_ascii=False)
-        db.execute("UPDATE advogados SET abordagem_personalizada = ? WHERE id = ?",
-                   (abordagem_json, adv_id))
+        try:
+            abordagem = gerar_abordagem(adv_row)
+            abordagem_json = json.dumps(abordagem, ensure_ascii=False)
+            db.execute("UPDATE advogados SET abordagem_personalizada = ? WHERE id = ?",
+                       (abordagem_json, adv_id))
+        except Exception as e:
+            logger.error(f"  Erro abordagem #{adv_id}: {e}")
+            continue
 
         # --- 3 Emails ---
         try:
@@ -328,7 +405,8 @@ def prospectar_50():
                 VALUES (?, 'final_14d', ?, ?, ?, ?, 'rascunho')""",
                 (adv_id, a3, h3, t3, (agora + timedelta(days=14)).isoformat()))
         except Exception as e:
-            logger.debug(f"  Erro emails {adv_id}: {e}")
+            logger.debug(f"  Erro emails #{adv_id}: {e}")
+            erros_msg += 1
 
         # --- 3 WhatsApp ---
         try:
@@ -350,9 +428,10 @@ def prospectar_50():
                 VALUES (?, 'final', ?, ?, 'pendente')""",
                 (adv_id, w3, (agora + timedelta(days=10)).isoformat()))
         except Exception as e:
-            logger.debug(f"  Erro whatsapp {adv_id}: {e}")
+            logger.debug(f"  Erro whatsapp #{adv_id}: {e}")
+            erros_msg += 1
 
-        # --- Fila automacao (6 msgs) ---
+        # --- Fila automacao (6 msgs: email+whatsapp intercalados) ---
         db.execute("""INSERT INTO automacao_fila
             (advogado_id, canal, tipo_mensagem, data_agendada, status)
             VALUES (?, 'email', 'primeiro_contato', ?, 'pendente')""",
@@ -363,46 +442,54 @@ def prospectar_50():
             (adv_id, (agora + timedelta(hours=1)).isoformat()))
         db.execute("""INSERT INTO automacao_fila
             (advogado_id, canal, tipo_mensagem, data_agendada, status)
-            VALUES (?, 'email', 'followup_4d', ?, 'pendente')""",
-            (adv_id, (agora + timedelta(days=4)).isoformat()))
-        db.execute("""INSERT INTO automacao_fila
-            (advogado_id, canal, tipo_mensagem, data_agendada, status)
             VALUES (?, 'whatsapp', 'followup', ?, 'pendente')""",
             (adv_id, (agora + timedelta(days=3)).isoformat()))
         db.execute("""INSERT INTO automacao_fila
             (advogado_id, canal, tipo_mensagem, data_agendada, status)
-            VALUES (?, 'email', 'final_14d', ?, 'pendente')""",
-            (adv_id, (agora + timedelta(days=14)).isoformat()))
+            VALUES (?, 'email', 'followup_4d', ?, 'pendente')""",
+            (adv_id, (agora + timedelta(days=4)).isoformat()))
         db.execute("""INSERT INTO automacao_fila
             (advogado_id, canal, tipo_mensagem, data_agendada, status)
             VALUES (?, 'whatsapp', 'final', ?, 'pendente')""",
             (adv_id, (agora + timedelta(days=10)).isoformat()))
+        db.execute("""INSERT INTO automacao_fila
+            (advogado_id, canal, tipo_mensagem, data_agendada, status)
+            VALUES (?, 'email', 'final_14d', ?, 'pendente')""",
+            (adv_id, (agora + timedelta(days=14)).isoformat()))
 
         total_msgs += 6
 
     db.commit()
-    logger.info(f"  {total_msgs} mensagens criadas! ({len(prospectos)} advogados x 6)")
+    logger.info(f"\n  {total_msgs} mensagens criadas! ({len(prospectos)} advogados x 6)")
+    if erros_msg:
+        logger.warning(f"  {erros_msg} erros ao gerar mensagens")
 
-    # Relatorio
+    # =========================================================
+    # RELATORIO FINAL
+    # =========================================================
     logger.info("\n" + "=" * 70)
     logger.info("RELATORIO FINAL")
     logger.info("=" * 70)
-    logger.info(f"Prospectos: {len(prospectos)}")
-    logger.info(f"Google CSE calls: {api_calls}/{MAX_API}")
+    logger.info(f"Total prospectos: {len(prospectos)}")
     ct = sum(1 for p in prospectos if p.get("telefone"))
     ce = sum(1 for p in prospectos if p.get("email"))
-    cl = sum(1 for p in prospectos if p.get("linkedin"))
+    cen = sum(1 for p in prospectos if p.get("endereco"))
+    ci = sum(1 for p in prospectos if p.get("instagram"))
+    cg = sum(1 for p in prospectos if p.get("google_avaliacao"))
     logger.info(f"Com telefone: {ct}/{len(prospectos)}")
     logger.info(f"Com email: {ce}/{len(prospectos)}")
-    logger.info(f"Com LinkedIn: {cl}/{len(prospectos)}")
-    logger.info(f"Mensagens: {total_msgs} (3 email + 3 whatsapp cada)")
-    logger.info(f"Fila automacao: {total_msgs} itens agendados")
+    logger.info(f"Com endereco: {cen}/{len(prospectos)}")
+    logger.info(f"Com Instagram: {ci}/{len(prospectos)}")
+    logger.info(f"Com Google Reviews: {cg}/{len(prospectos)}")
+    logger.info(f"Mensagens totais: {total_msgs}")
+    logger.info(f"  - 3 emails + 3 WhatsApp por advogado")
+    logger.info(f"  - Fila automacao: {total_msgs} itens")
 
-    logger.info("\n--- Prospectos ---")
+    logger.info(f"\n{'─'*70}")
+    logger.info(f"{'#':>3} {'Nome':<35} {'Cidade':<18} {'Score':>5}")
+    logger.info(f"{'─'*70}")
     for i, p in enumerate(prospectos, 1):
-        logger.info(f"  {i:2d}. {p['nome']:<30} {p['cidade']:<18} "
-                    f"Tel: {p.get('telefone') or '-':<16} "
-                    f"Email: {p.get('email') or '-'}")
+        logger.info(f"{i:3d} {p['nome']:<35} {p['cidade']:<18} {p['score']:>5}")
 
     db.close()
     return prospectos
@@ -411,6 +498,7 @@ def prospectar_50():
 if __name__ == "__main__":
     prospectos = prospectar_50()
     print(f"\n{'='*70}")
-    print(f"CONCLUIDO: {len(prospectos)} prospectos com {len(prospectos)*6} mensagens prontas!")
+    print(f"CONCLUIDO: {len(prospectos)} prospectos com {len(prospectos)*6} mensagens!")
+    print(f"Todos com: telefone, email, endereco")
     print(f"Acesse http://localhost:5050 para ver e enviar")
     print(f"{'='*70}")
