@@ -1383,6 +1383,56 @@ def api_enriquecer_todos():
         return jsonify({"ok": False, "erro": str(e)}), 500
 
 
+# ─── API Prospecção ─────────────────────────────────────────
+
+@app.route("/api/prospectar", methods=["POST"])
+def api_prospectar():
+    """API: Prospectar novos escritórios com verificação integrada de site."""
+    try:
+        from prospectar_advogados import prospectar_escritorios_reais
+        n = 10
+        if request.is_json and request.json:
+            n = request.json.get("quantidade", 10)
+        resultado = prospectar_escritorios_reais(n)
+        return jsonify({"ok": True, **resultado})
+    except ImportError as ie:
+        logger.error(f"Erro ao importar prospectar_advogados: {ie}")
+        return jsonify({"ok": False, "erro": "Módulo de prospecção não disponível"}), 500
+    except Exception as e:
+        logger.error(f"Erro ao prospectar: {e}")
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/verificar-site", methods=["POST"])
+def api_verificar_site():
+    """API: Verificar se um escritório tem site (teste rápido)."""
+    try:
+        from prospectar_advogados import verificar_site_completo
+        data = request.get_json()
+        nome = data.get("nome", "")
+        nome_escritorio = data.get("nome_escritorio", nome)
+        cidade = data.get("cidade", "")
+        estado = data.get("estado", "")
+
+        resultado = verificar_site_completo(nome, nome_escritorio, cidade, estado)
+        return jsonify({"ok": True, **resultado})
+    except Exception as e:
+        logger.error(f"Erro ao verificar site: {e}")
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/api/limpar-banco", methods=["POST"])
+def api_limpar_banco():
+    """API: Limpar todos os dados do banco para recomeco."""
+    try:
+        from prospectar_advogados import limpar_banco
+        limpar_banco()
+        return jsonify({"ok": True, "mensagem": "Banco limpo com sucesso"})
+    except Exception as e:
+        logger.error(f"Erro ao limpar banco: {e}")
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
 @app.route("/api/dashboard/stats")
 def api_stats():
     """API: Estatísticas gerais para dashboard."""
