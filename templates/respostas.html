@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Respostas — ProspectAdv{% endblock %}
+{% block page_title %}Respostas Recebidas{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-reply-all"></i> Respostas ({{ respostas|length }})</h3>
+    </div>
+    <div class="card-body">
+        {% if respostas %}
+        <div class="respostas-list">
+            {% for r in respostas %}
+            <div class="resposta-card resposta-{{ r.sentimento or 'neutro' }}">
+                <div class="resposta-header">
+                    <div class="resposta-info">
+                        <a href="/advogado/{{ r.advogado_id }}" class="resposta-nome">
+                            {{ r.nome }}
+                            {% if r.nome_escritorio %}<small>({{ r.nome_escritorio }})</small>{% endif %}
+                        </a>
+                        <span class="resposta-local">{{ r.cidade or '' }}/{{ r.estado or '' }}</span>
+                    </div>
+                    <div class="resposta-meta">
+                        <span class="badge {{ 'badge-info' if r.canal == 'email' else 'badge-success' }}">
+                            {{ '📧 Email' if r.canal == 'email' else '💬 WhatsApp' }}
+                        </span>
+                        {% if r.sentimento %}
+                        <span class="badge badge-{{ 'success' if r.sentimento == 'positivo' else ('danger' if r.sentimento == 'negativo' else 'warning') }}">
+                            {{ r.sentimento | capitalize }}
+                        </span>
+                        {% endif %}
+                        <span class="score-badge score-{{ 'high' if r.score_potencial >= 70 else ('mid' if r.score_potencial >= 40 else 'low') }}">
+                            {{ r.score_potencial }}
+                        </span>
+                    </div>
+                </div>
+                <div class="resposta-body">
+                    <p>{{ r.conteudo }}</p>
+                </div>
+                <div class="resposta-footer">
+                    <small>{{ r.data_recebimento }}</small>
+                    <div class="resposta-actions">
+                        <a href="/advogado/{{ r.advogado_id }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-eye"></i> Ver Lead
+                        </a>
+                        <button class="btn btn-sm btn-success" onclick="marcarInteresse({{ r.advogado_id }})">
+                            <i class="fas fa-thumbs-up"></i> Interessado
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-inbox" style="font-size: 3rem; color: var(--text-muted);"></i>
+            <h3>Nenhuma resposta recebida ainda</h3>
+            <p>As respostas aparecerão aqui conforme os advogados responderem.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function marcarInteresse(id) {
+    const data = await apiCall(`/api/advogado/${id}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status: 'interessado' }),
+    });
+    if (data) {
+        showToast('Lead marcado como interessado!', 'success');
+        setTimeout(() => location.reload(), 1000);
+    }
+}
+</script>
+{% endblock %}

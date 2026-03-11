@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Automação — ProspectAdv{% endblock %}
+{% block page_title %}Automação de Envios{% endblock %}
+
+{% block topbar_actions %}
+<div class="topbar-filters">
+    <span class="badge badge-info">📧 {{ emails_hoje }}/{{ limite_emails }}</span>
+    <span class="badge badge-success">💬 {{ whatsapp_hoje }}/{{ limite_whatsapp }}</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Controles -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-cogs"></i> Controles de Automação</h3>
+    </div>
+    <div class="card-body">
+        <div class="quick-actions">
+            <button class="btn btn-success" onclick="iniciarAutomacao()">
+                <i class="fas fa-play"></i> Adicionar Leads à Fila
+            </button>
+            <button class="btn btn-primary" onclick="processarFila()">
+                <i class="fas fa-sync"></i> Processar Fila Agora
+            </button>
+            <button class="btn btn-info" onclick="atualizarContagem()">
+                <i class="fas fa-chart-bar"></i> Atualizar Contagem
+            </button>
+        </div>
+
+        <div class="automacao-config" style="margin-top: 20px;">
+            <div class="row-grid">
+                <div>
+                    <label>Score Mínimo</label>
+                    <select id="score-minimo" class="form-select">
+                        <option value="30">Score ≥ 30</option>
+                        <option value="50" selected>Score ≥ 50</option>
+                        <option value="70">Score ≥ 70</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Limite de Leads</label>
+                    <select id="limite-leads" class="form-select">
+                        <option value="10">10 leads</option>
+                        <option value="20" selected>20 leads</option>
+                        <option value="50">50 leads</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Contas Gmail -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-at"></i> Contas Gmail</h3>
+    </div>
+    <div class="card-body">
+        {% if contas %}
+            <div class="contas-grid">
+                {% for conta in contas %}
+                <div class="conta-card">
+                    <i class="fas fa-envelope-open"></i>
+                    <strong>{{ conta.email }}</strong>
+                    <span class="badge {{ 'badge-success' if conta.ativo else 'badge-danger' }}">
+                        {{ 'Ativo' if conta.ativo else 'Inativo' }}
+                    </span>
+                    <small>{{ conta.envios_hoje or 0 }} envios hoje</small>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted">Nenhuma conta Gmail conectada.</p>
+        {% endif %}
+        <a href="/gmail/conectar/1" class="btn btn-secondary" style="margin-top: 15px;">
+            <i class="fas fa-plus"></i> Conectar Conta Gmail
+        </a>
+    </div>
+</div>
+
+<!-- Fila de Envio -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-list-ol"></i> Fila de Envio ({{ fila|length }})</h3>
+    </div>
+    <div class="card-body">
+        {% if fila %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Advogado</th>
+                        <th>Cidade/UF</th>
+                        <th>Canal</th>
+                        <th>Tipo</th>
+                        <th>Data Agendada</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in fila %}
+                    <tr>
+                        <td>
+                            <a href="/advogado/{{ item.advogado_id }}">
+                                {{ item.nome }}
+                                {% if item.nome_escritorio %}
+                                    <small>({{ item.nome_escritorio }})</small>
+                                {% endif %}
+                            </a>
+                        </td>
+                        <td>{{ item.cidade or '—' }}/{{ item.estado or '—' }}</td>
+                        <td>
+                            {% if item.canal == 'email' %}
+                                <span class="badge badge-info"><i class="fas fa-envelope"></i> Email</span>
+                            {% else %}
+                                <span class="badge badge-success"><i class="fab fa-whatsapp"></i> WhatsApp</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.tipo_mensagem }}</td>
+                        <td>{{ item.data_agendada[:16] if item.data_agendada else '—' }}</td>
+                        <td>
+                            <span class="status-badge status-{{ item.status }}">{{ item.status }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <div class="empty-state">
+                <i class="fas fa-inbox" style="font-size: 3rem; color: var(--text-muted);"></i>
+                <p>Fila vazia. Clique em "Adicionar Leads à Fila" para começar.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function iniciarAutomacao() {
+    const scoreMinimo = document.getElementById('score-minimo').value;
+    const limite = document.getElementById('limite-leads').value;
+
+    if (!confirmar(`Adicionar leads com score ≥ ${scoreMinimo} à fila? (máx ${limite})`)) return;
+
+    const data = await apiCall('/api/automacao/iniciar', {
+        method: 'POST',
+        body: JSON.stringify({ score_minimo: parseInt(scoreMinimo), limite: parseInt(limite) }),
+    });
+
+    if (data) {
+        showToast(data.mensagem, 'success');
+        setTimeout(() => location.reload(), 2000);
+    }
+}
+
+async function processarFila() {
+    const data = await apiCall('/api/automacao/processar', { method: 'POST' });
+    if (data) {
+        showToast(data.mensagem, 'success');
+        setTimeout(() => location.reload(), 2000);
+    }
+}
+
+async function atualizarContagem() {
+    const data = await apiCall('/api/email/contagem-hoje');
+    if (data) {
+        showToast(
+            `Emails: ${data.emails_hoje}/${data.limite} | WhatsApp: ${data.whatsapp_hoje}/${data.limite_whatsapp}`,
+            'info'
+        );
+    }
+}
+</script>
+{% endblock %}

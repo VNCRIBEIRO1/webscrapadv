@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}WhatsApp — ProspectAdv{% endblock %}
+{% block page_title %}Painel WhatsApp{% endblock %}
+
+{% block topbar_actions %}
+<span class="badge badge-success">💬 {{ whatsapp_hoje }}/{{ limite_whatsapp }} hoje</span>
+{% endblock %}
+
+{% block content %}
+<!-- Status da Conexão -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fab fa-whatsapp"></i> Status da Conexão</h3>
+    </div>
+    <div class="card-body">
+        <div class="whatsapp-status" id="wpp-status">
+            <div class="status-indicator status-checking">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Verificando conexão...</span>
+            </div>
+        </div>
+        <div class="quick-actions" style="margin-top: 15px;">
+            <button class="btn btn-success" onclick="verificarStatus()">
+                <i class="fas fa-sync"></i> Verificar Status
+            </button>
+            <button class="btn btn-primary" onclick="iniciarSessao()">
+                <i class="fab fa-whatsapp"></i> Iniciar Sessão
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Mensagens Enviadas -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-paper-plane"></i> Mensagens Enviadas ({{ mensagens|length }})</h3>
+    </div>
+    <div class="card-body">
+        {% if mensagens %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Advogado</th>
+                        <th>Número</th>
+                        <th>Tipo</th>
+                        <th>Preview</th>
+                        <th>Data</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in mensagens %}
+                    <tr>
+                        <td>
+                            <a href="/advogado/{{ m.advogado_id }}">
+                                {{ m.nome }}
+                                {% if m.nome_escritorio %}<small>({{ m.nome_escritorio }})</small>{% endif %}
+                            </a>
+                        </td>
+                        <td>{{ m.whatsapp or '—' }}</td>
+                        <td><span class="badge badge-info">{{ m.tipo }}</span></td>
+                        <td class="msg-preview-cell">{{ m.mensagem[:80] if m.mensagem else '—' }}...</td>
+                        <td>{{ m.data_envio[:16] if m.data_envio else '—' }}</td>
+                        <td>
+                            <span class="status-badge status-{{ m.status }}">
+                                {% if m.status == 'enviado' %}✅{% elif m.status == 'lido' %}👁️{% elif m.status == 'respondido' %}💬{% else %}⏳{% endif %}
+                                {{ m.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fab fa-whatsapp" style="font-size: 3rem; color: #25D366;"></i>
+            <h3>Nenhuma mensagem enviada ainda</h3>
+            <p>Conecte o WhatsApp e inicie o envio automatizado.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Instruções WPPConnect -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-info-circle"></i> Configuração do WPPConnect</h3>
+    </div>
+    <div class="card-body">
+        <div class="instructions">
+            <h4>Como configurar o WPPConnect Server:</h4>
+            <ol>
+                <li>Instale o Node.js (v16+)</li>
+                <li>Clone: <code>git clone https://github.com/wppconnect-team/wppconnect-server.git</code></li>
+                <li>Instale: <code>cd wppconnect-server && npm install</code></li>
+                <li>Configure o <code>.env</code> com a SECRET_KEY</li>
+                <li>Inicie: <code>npm start</code> (padrão: porta 21465)</li>
+                <li>Escaneie o QR Code com o WhatsApp</li>
+            </ol>
+            <p class="text-muted">
+                <i class="fas fa-shield-alt"></i>
+                O WPPConnect é um projeto open-source. Use de forma responsável
+                e respeite os termos de uso do WhatsApp.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function verificarStatus() {
+    const container = document.getElementById('wpp-status');
+    container.innerHTML = '<div class="status-indicator status-checking"><i class="fas fa-spinner fa-spin"></i><span>Verificando...</span></div>';
+
+    try {
+        // Simulated — in production would call whatsapp_service
+        container.innerHTML = `
+            <div class="status-indicator status-disconnected">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>WPPConnect não conectado. Configure o servidor primeiro.</span>
+            </div>
+        `;
+    } catch (e) {
+        container.innerHTML = `
+            <div class="status-indicator status-error">
+                <i class="fas fa-times-circle"></i>
+                <span>Erro ao verificar: ${e.message}</span>
+            </div>
+        `;
+    }
+}
+
+async function iniciarSessao() {
+    showToast('Configure o WPPConnect Server antes de iniciar a sessão.', 'warning');
+}
+
+// Verificar status ao carregar
+verificarStatus();
+</script>
+{% endblock %}

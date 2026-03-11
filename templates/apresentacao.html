@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proposta — {{ adv.nome_escritorio or adv.nome }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a365d;
+            --accent: #c9a84c;
+            --text: #2d3748;
+            --bg: #f7fafc;
+            --card-bg: #ffffff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, #2d4a7a 100%);
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .hero .oab-badge {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--primary);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .section h2 {
+            color: var(--primary);
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section h2 i {
+            color: var(--accent);
+        }
+
+        .problem-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #edf2f7;
+            list-style: none;
+        }
+
+        .problem-list li::before {
+            content: "⚠️ ";
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .feature-item {
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        .feature-item i {
+            font-size: 2rem;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .feature-item h4 {
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .portfolio-link {
+            display: block;
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--primary), #2d4a7a);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+
+        .portfolio-link:hover {
+            transform: translateY(-2px);
+        }
+
+        .pacotes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .pacote {
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            text-align: center;
+        }
+
+        .pacote.destaque {
+            border-color: var(--accent);
+            position: relative;
+        }
+
+        .pacote.destaque::before {
+            content: "★ Recomendado";
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: var(--primary);
+            padding: 3px 15px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .pacote h3 {
+            color: var(--primary);
+            margin: 10px 0;
+        }
+
+        .pacote ul {
+            list-style: none;
+            text-align: left;
+            margin: 15px 0;
+        }
+
+        .pacote ul li {
+            padding: 5px 0;
+        }
+
+        .pacote ul li::before {
+            content: "✅ ";
+        }
+
+        .oab-compliance {
+            background: #f0fff4;
+            border-left: 4px solid #48bb78;
+            padding: 20px;
+            border-radius: 0 10px 10px 0;
+        }
+
+        .cta-section {
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, var(--primary), #2d4a7a);
+            color: white;
+            border-radius: 12px;
+        }
+
+        .cta-section h2 {
+            color: white;
+            justify-content: center;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: transform 0.2s;
+        }
+
+        .cta-btn:hover { transform: translateY(-2px); }
+
+        .cta-btn-whatsapp {
+            background: #25D366;
+            color: white;
+        }
+
+        .cta-btn-email {
+            background: var(--accent);
+            color: var(--primary);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 1.6rem; }
+            .feature-grid { grid-template-columns: 1fr; }
+            .pacotes-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+    <!-- Hero -->
+    <div class="hero">
+        <h1>Proposta de Site Institucional</h1>
+        <p>Desenvolvido especialmente para
+            <strong>{{ adv.nome_escritorio or adv.nome }}</strong>
+        </p>
+        {% if adv.numero_oab %}
+            <span class="oab-badge">OAB/{{ adv.seccional_oab }} {{ adv.numero_oab }}</span>
+        {% endif %}
+    </div>
+
+    <div class="container">
+
+        <!-- Diagnóstico -->
+        <div class="section">
+            <h2><i class="fas fa-search"></i> Diagnóstico Digital</h2>
+            <p>Após uma análise da presença digital do escritório
+               <strong>{{ adv.nome_escritorio or adv.nome }}</strong>
+               em {{ adv.cidade or 'sua cidade' }}/{{ adv.estado or '' }}, identificamos:</p>
+
+            <ul class="problem-list">
+                {% if not adv.tem_site %}
+                <li><strong>Sem site institucional</strong> — potenciais clientes que buscam
+                    "advogado {{ adv.cidade or '' }}" no Google não encontram seu escritório.</li>
+                {% endif %}
+
+                {% if adv.google_avaliacao and adv.google_avaliacao >= 4.0 %}
+                <li><strong>Excelente reputação no Google</strong> ({{ adv.google_avaliacao }}⭐ com
+                    {{ adv.google_reviews }} avaliações) — mas sem site para capitalizar essa credibilidade.</li>
+                {% endif %}
+
+                {% if adv.instagram %}
+                <li><strong>Perfil ativo no Instagram</strong> ({{ adv.instagram }},
+                    {{ adv.instagram_seguidores }} seguidores) — sem landing page para converter seguidores.</li>
+                {% endif %}
+
+                <li>87% das pessoas pesquisam um advogado no Google antes de ligar.
+                    Sem site, esses clientes vão para a concorrência.</li>
+            </ul>
+        </div>
+
+        <!-- Solução -->
+        <div class="section">
+            <h2><i class="fas fa-lightbulb"></i> A Solução</h2>
+            <p>Um site institucional profissional, desenvolvido especialmente para escritórios de advocacia,
+               com foco em <strong>{{ areas[0] if areas else 'sua área de atuação' }}</strong>.</p>
+
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <i class="fas fa-mobile-alt"></i>
+                    <h4>Responsivo</h4>
+                    <p>Perfeito em celular, tablet e desktop</p>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-robot"></i>
+                    <h4>Chatbot</h4>
+                    <p>Triagem automática de clientes 24h</p>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-calendar-check"></i>
+                    <h4>Agendamento</h4>
+                    <p>Consultas online sem intermediários</p>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-blog"></i>
+                    <h4>Blog Jurídico</h4>
+                    <p>Conteúdo que atrai clientes organicamente</p>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-calculator"></i>
+                    <h4>Calculadora</h4>
+                    <p>Direitos trabalhistas, previdenciários</p>
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-search-dollar"></i>
+                    <h4>SEO</h4>
+                    <p>Apareça no Google para sua região</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portfólio -->
+        <div class="section">
+            <h2><i class="fas fa-eye"></i> Veja um Exemplo Real</h2>
+            <p>Site desenvolvido para o escritório <strong>Cerbelera & Oliveira Advogados</strong>,
+               com todas as features mencionadas:</p>
+
+            <a href="{{ vendedor.portfolio }}" class="portfolio-link" target="_blank">
+                🔗 Ver Portfólio — cerbeleraeoliveiraadv.vercel.app
+            </a>
+        </div>
+
+        <!-- Pacotes -->
+        <div class="section">
+            <h2><i class="fas fa-box-open"></i> Pacotes</h2>
+            <div class="pacotes-grid">
+                <div class="pacote">
+                    <h3>📄 Landing Page</h3>
+                    <p>Página única e impactante</p>
+                    <ul>
+                        <li>Design responsivo</li>
+                        <li>Formulário de contato</li>
+                        <li>WhatsApp integrado</li>
+                        <li>Áreas de atuação</li>
+                        <li>Google Maps</li>
+                    </ul>
+                </div>
+                <div class="pacote destaque">
+                    <h3>🏛️ Institucional</h3>
+                    <p>Site completo profissional</p>
+                    <ul>
+                        <li>Tudo do Landing Page +</li>
+                        <li>Blog jurídico com CMS</li>
+                        <li>Agendamento online</li>
+                        <li>Avaliações Google</li>
+                        <li>SEO otimizado</li>
+                        <li>Domínio personalizado</li>
+                    </ul>
+                </div>
+                <div class="pacote">
+                    <h3>🚀 Premium</h3>
+                    <p>Solução completa com IA</p>
+                    <ul>
+                        <li>Tudo do Institucional +</li>
+                        <li>Chatbot de triagem IA</li>
+                        <li>Calculadora de direitos</li>
+                        <li>Área do cliente</li>
+                        <li>Analytics avançado</li>
+                        <li>Suporte prioritário</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conformidade OAB -->
+        <div class="section">
+            <h2><i class="fas fa-shield-alt"></i> Conformidade com a OAB</h2>
+            <div class="oab-compliance">
+                <p><strong>Provimento 205/2021 — Conselho Federal da OAB</strong></p>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>✅ Sites informativos são <strong>permitidos e incentivados</strong></li>
+                    <li>✅ Blog com conteúdo educativo é permitido</li>
+                    <li>✅ Agendamento online é permitido</li>
+                    <li>✅ Chatbot para triagem informativa é permitido</li>
+                    <li>✅ Caráter meramente informativo garantido</li>
+                </ul>
+                <p style="margin-top: 10px; font-style: italic; color: #2f855a;">
+                    Todos os sites são desenvolvidos em estrita conformidade com o
+                    Código de Ética e Disciplina da OAB.
+                </p>
+            </div>
+        </div>
+
+        <!-- CTA Final -->
+        <div class="cta-section">
+            <h2><i class="fas fa-handshake"></i> Vamos Conversar?</h2>
+            <p>Agende uma conversa rápida de 15 minutos para ver como ficaria
+               o site personalizado para o seu escritório.</p>
+
+            <div class="cta-buttons">
+                <a href="{{ vendedor.whatsapp_link }}" class="cta-btn cta-btn-whatsapp" target="_blank">
+                    <i class="fab fa-whatsapp"></i> WhatsApp
+                </a>
+                <a href="mailto:{{ vendedor.email_profissional }}" class="cta-btn cta-btn-email">
+                    <i class="fas fa-envelope"></i> Email
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>{{ vendedor.nome }} — Web Designer Especializado em Sites para Advocacia</p>
+        <p>📱 {{ vendedor.telefone }} | 🌐 <a href="{{ vendedor.portfolio }}">{{ vendedor.portfolio }}</a></p>
+        <p style="margin-top: 10px; font-size: 0.8rem;">
+            <em>Esta proposta tem caráter informativo. Site em conformidade com o Provimento 205/2021 OAB.</em>
+        </p>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ProspectAdv{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <i class="fas fa-gavel"></i>
+                <span>ProspectAdv</span>
+            </div>
+            <button class="sidebar-toggle" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
+                <i class="fas fa-chart-line"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="/advogados" class="nav-item {% if '/advogados' in request.path %}active{% endif %}">
+                <i class="fas fa-users"></i>
+                <span>Advogados</span>
+            </a>
+            <a href="/automacao" class="nav-item {% if '/automacao' in request.path %}active{% endif %}">
+                <i class="fas fa-robot"></i>
+                <span>Automação</span>
+            </a>
+            <a href="/respostas" class="nav-item {% if '/respostas' in request.path %}active{% endif %}">
+                <i class="fas fa-reply-all"></i>
+                <span>Respostas</span>
+            </a>
+            <a href="/whatsapp" class="nav-item {% if '/whatsapp' in request.path %}active{% endif %}">
+                <i class="fab fa-whatsapp"></i>
+                <span>WhatsApp</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="vendedor-info">
+                <i class="fas fa-user-circle"></i>
+                <div>
+                    <strong>{{ vendedor.nome.split()[0] }}</strong>
+                    <small>{{ vendedor.telefone }}</small>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <button class="mobile-toggle" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="page-title">{% block page_title %}ProspectAdv{% endblock %}</h1>
+            <div class="topbar-actions">
+                {% block topbar_actions %}{% endblock %}
+            </div>
+        </header>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                            <button class="alert-close" onclick="this.parentElement.remove()">×</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Page Content -->
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script>
+        // Sidebar toggle
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('main-content').classList.toggle('expanded');
+        }
+
+        // Toast notification
+        function showToast(message, type = 'info', duration = 4000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+
+            const icons = {
+                'success': 'fas fa-check-circle',
+                'error': 'fas fa-times-circle',
+                'warning': 'fas fa-exclamation-triangle',
+                'info': 'fas fa-info-circle',
+            };
+
+            toast.innerHTML = `
+                <i class="${icons[type] || icons.info}"></i>
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()">×</button>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('toast-fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        // Fetch helper
+        async function apiCall(url, options = {}) {
+            try {
+                const defaults = {
+                    headers: { 'Content-Type': 'application/json' },
+                };
+                const response = await fetch(url, { ...defaults, ...options });
+                const data = await response.json();
+
+                if (!response.ok || data.erro) {
+                    showToast(data.erro || 'Erro na operação', 'error');
+                    return null;
+                }
+                return data;
+            } catch (e) {
+                showToast('Erro de conexão: ' + e.message, 'error');
+                return null;
+            }
+        }
+
+        // Confirm dialog
+        function confirmar(msg) {
+            return confirm(msg);
+        }
+
+        // Format date
+        function formatarData(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Mobile sidebar auto-collapse
+        if (window.innerWidth < 768) {
+            document.getElementById('sidebar').classList.add('collapsed');
+            document.getElementById('main-content').classList.add('expanded');
+        }
+    </script>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

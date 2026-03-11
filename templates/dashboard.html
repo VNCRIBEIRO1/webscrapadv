@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — ProspectAdv{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card stat-primary">
+        <div class="stat-icon"><i class="fas fa-users"></i></div>
+        <div class="stat-info">
+            <h3>{{ stats.total }}</h3>
+            <p>Total de Leads</p>
+        </div>
+    </div>
+    <div class="stat-card stat-danger">
+        <div class="stat-icon"><i class="fas fa-globe-americas"></i></div>
+        <div class="stat-info">
+            <h3>{{ stats.sem_site }}</h3>
+            <p>Sem Site</p>
+        </div>
+    </div>
+    <div class="stat-card stat-success">
+        <div class="stat-icon"><i class="fas fa-handshake"></i></div>
+        <div class="stat-info">
+            <h3>{{ stats.interessados }}</h3>
+            <p>Interessados</p>
+        </div>
+    </div>
+    <div class="stat-card stat-gold">
+        <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+        <div class="stat-info">
+            <h3>{{ stats.fechados }}</h3>
+            <p>Fechados</p>
+        </div>
+    </div>
+</div>
+
+<!-- Envios Hoje -->
+<div class="row-grid">
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-paper-plane"></i> Envios Hoje</h3>
+        </div>
+        <div class="card-body">
+            <div class="progress-group">
+                <div class="progress-label">
+                    <span><i class="fas fa-envelope"></i> Emails</span>
+                    <span>{{ stats.emails_hoje }} / {{ stats.limite_emails }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill progress-email" 
+                         style="width: {{ (stats.emails_hoje / stats.limite_emails * 100) | int }}%"></div>
+                </div>
+            </div>
+            <div class="progress-group">
+                <div class="progress-label">
+                    <span><i class="fab fa-whatsapp"></i> WhatsApp</span>
+                    <span>{{ stats.whatsapp_hoje }} / {{ stats.limite_whatsapp }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill progress-whatsapp" 
+                         style="width: {{ (stats.whatsapp_hoje / stats.limite_whatsapp * 100) | int }}%"></div>
+                </div>
+            </div>
+            <div class="stats-mini">
+                <div class="stat-mini">
+                    <span class="label">Total Emails</span>
+                    <span class="value">{{ stats.total_emails }}</span>
+                </div>
+                <div class="stat-mini">
+                    <span class="label">Total WhatsApp</span>
+                    <span class="value">{{ stats.total_whatsapp }}</span>
+                </div>
+                <div class="stat-mini">
+                    <span class="label">Respostas</span>
+                    <span class="value">{{ stats.total_respostas }}</span>
+                </div>
+                <div class="stat-mini">
+                    <span class="label">Score Médio</span>
+                    <span class="value">{{ stats.score_medio }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-funnel-dollar"></i> Funil de Conversão</h3>
+        </div>
+        <div class="card-body">
+            <div class="funnel">
+                <div class="funnel-step">
+                    <div class="funnel-bar funnel-novo" style="width: 100%">
+                        <span>Novos: {{ stats.novos }}</span>
+                    </div>
+                </div>
+                <div class="funnel-step">
+                    <div class="funnel-bar funnel-contatado" 
+                         style="width: {{ ((stats.contatados / stats.total * 100) if stats.total else 0) | int }}%">
+                        <span>Contatados: {{ stats.contatados }}</span>
+                    </div>
+                </div>
+                <div class="funnel-step">
+                    <div class="funnel-bar funnel-interessado" 
+                         style="width: {{ ((stats.interessados / stats.total * 100) if stats.total else 0) | int }}%">
+                        <span>Interessados: {{ stats.interessados }}</span>
+                    </div>
+                </div>
+                <div class="funnel-step">
+                    <div class="funnel-bar funnel-fechado" 
+                         style="width: {{ ((stats.fechados / stats.total * 100) if stats.total else 0) | int }}%">
+                        <span>Fechados: {{ stats.fechados }}</span>
+                    </div>
+                </div>
+                <div class="funnel-step">
+                    <div class="funnel-bar funnel-perdido" 
+                         style="width: {{ ((stats.perdidos / stats.total * 100) if stats.total else 0) | int }}%">
+                        <span>Perdidos: {{ stats.perdidos }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Estados e Áreas -->
+<div class="row-grid">
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-map-marker-alt"></i> Top Estados</h3>
+        </div>
+        <div class="card-body">
+            {% if stats.estados %}
+                <div class="ranking-list">
+                    {% for est in stats.estados %}
+                    <div class="ranking-item">
+                        <span class="ranking-pos">#{{ loop.index }}</span>
+                        <span class="ranking-name">{{ est[0] }}</span>
+                        <span class="ranking-value">{{ est[1] }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted">Nenhum dado disponível</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-balance-scale"></i> Top Áreas de Atuação</h3>
+        </div>
+        <div class="card-body">
+            {% if stats.top_areas %}
+                <div class="ranking-list">
+                    {% for area, count in stats.top_areas %}
+                    <div class="ranking-item">
+                        <span class="ranking-pos">#{{ loop.index }}</span>
+                        <span class="ranking-name">{{ area }}</span>
+                        <span class="ranking-value">{{ count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted">Nenhum dado disponível</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Ações Rápidas -->
+<div class="card">
+    <div class="card-header">
+        <h3><i class="fas fa-bolt"></i> Ações Rápidas</h3>
+    </div>
+    <div class="card-body">
+        <div class="quick-actions">
+            <a href="/advogados?status=novo&score_min=50" class="btn btn-primary">
+                <i class="fas fa-star"></i> Ver Leads Score ≥ 50
+            </a>
+            <button class="btn btn-success" onclick="iniciarAutomacao()">
+                <i class="fas fa-play"></i> Iniciar Automação
+            </button>
+            <button class="btn btn-info" onclick="processarFila()">
+                <i class="fas fa-sync"></i> Processar Fila ({{ stats.fila_pendente }} pendentes)
+            </button>
+            <a href="/advogados?status=interessado" class="btn btn-gold">
+                <i class="fas fa-fire"></i> Ver Interessados
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function iniciarAutomacao() {
+    if (!confirmar('Adicionar leads com score ≥ 50 à fila de automação?')) return;
+
+    const data = await apiCall('/api/automacao/iniciar', {
+        method: 'POST',
+        body: JSON.stringify({ score_minimo: 50, limite: 20 }),
+    });
+
+    if (data) {
+        showToast(data.mensagem, 'success');
+        setTimeout(() => location.reload(), 2000);
+    }
+}
+
+async function processarFila() {
+    const data = await apiCall('/api/automacao/processar', {
+        method: 'POST',
+    });
+
+    if (data) {
+        showToast(data.mensagem, 'success');
+        setTimeout(() => location.reload(), 2000);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Advogados — ProspectAdv{% endblock %}
+{% block page_title %}Advogados ({{ total }}){% endblock %}
+
+{% block topbar_actions %}
+<div class="topbar-filters">
+    <span class="badge badge-info">{{ total }} leads</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="card filter-card">
+    <form method="GET" class="filters-form">
+        <div class="filter-group">
+            <input type="text" name="q" placeholder="Buscar nome, escritório, email, cidade..." 
+                   value="{{ busca }}" class="form-input">
+        </div>
+        <div class="filter-group">
+            <select name="status" class="form-select">
+                <option value="">Todos os status</option>
+                <option value="novo" {{ 'selected' if filtro_status == 'novo' }}>🟢 Novo</option>
+                <option value="contatado" {{ 'selected' if filtro_status == 'contatado' }}>🔵 Contatado</option>
+                <option value="interessado" {{ 'selected' if filtro_status == 'interessado' }}>🟡 Interessado</option>
+                <option value="fechado" {{ 'selected' if filtro_status == 'fechado' }}>🏆 Fechado</option>
+                <option value="perdido" {{ 'selected' if filtro_status == 'perdido' }}>🔴 Perdido</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <select name="estado" class="form-select">
+                <option value="">Todos os estados</option>
+                {% for est in estados %}
+                    <option value="{{ est[0] }}" {{ 'selected' if filtro_estado == est[0] }}>{{ est[0] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <select name="area" class="form-select">
+                <option value="">Todas as áreas</option>
+                <option value="Trabalhista" {{ 'selected' if filtro_area == 'Trabalhista' }}>Trabalhista</option>
+                <option value="Criminal" {{ 'selected' if filtro_area == 'Criminal' }}>Criminal</option>
+                <option value="Civil" {{ 'selected' if filtro_area == 'Civil' }}>Civil</option>
+                <option value="Consumidor" {{ 'selected' if filtro_area == 'Consumidor' }}>Consumidor</option>
+                <option value="Empresarial" {{ 'selected' if filtro_area == 'Empresarial' }}>Empresarial</option>
+                <option value="Família" {{ 'selected' if filtro_area == 'Família' }}>Família</option>
+                <option value="Previdenciário" {{ 'selected' if filtro_area == 'Previdenciário' }}>Previdenciário</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <select name="score_min" class="form-select">
+                <option value="">Qualquer score</option>
+                <option value="30" {{ 'selected' if filtro_score_min == '30' }}>Score ≥ 30</option>
+                <option value="50" {{ 'selected' if filtro_score_min == '50' }}>Score ≥ 50</option>
+                <option value="70" {{ 'selected' if filtro_score_min == '70' }}>Score ≥ 70</option>
+                <option value="90" {{ 'selected' if filtro_score_min == '90' }}>Score ≥ 90</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-search"></i> Filtrar
+        </button>
+        <a href="/advogados" class="btn btn-ghost">Limpar</a>
+    </form>
+</div>
+
+<!-- Tabela de Advogados -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Score</th>
+                    <th>Nome / Escritório</th>
+                    <th>Cidade/UF</th>
+                    <th>OAB</th>
+                    <th>Contato</th>
+                    <th>Digital</th>
+                    <th>Google</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for adv in advogados %}
+                <tr class="table-row" onclick="window.location='/advogado/{{ adv.id }}'">
+                    <td>
+                        <div class="score-badge score-{{ 'high' if adv.score_potencial >= 70 else ('mid' if adv.score_potencial >= 40 else 'low') }}">
+                            {{ adv.score_potencial }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="lead-name">
+                            <strong>{{ adv.nome }}</strong>
+                            {% if adv.nome_escritorio %}
+                                <small>{{ adv.nome_escritorio }}</small>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>{{ adv.cidade or '—' }}/{{ adv.estado or '—' }}</td>
+                    <td>
+                        {% if adv.numero_oab %}
+                            <span class="oab-badge">OAB/{{ adv.seccional_oab }} {{ adv.numero_oab }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="contact-icons">
+                            {% if adv.email %}
+                                <span class="icon-badge" title="{{ adv.email }}"><i class="fas fa-envelope"></i></span>
+                            {% endif %}
+                            {% if adv.telefone %}
+                                <span class="icon-badge" title="{{ adv.telefone }}"><i class="fas fa-phone"></i></span>
+                            {% endif %}
+                            {% if adv.whatsapp %}
+                                <span class="icon-badge icon-whatsapp" title="{{ adv.whatsapp }}"><i class="fab fa-whatsapp"></i></span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="contact-icons">
+                            {% if adv.instagram %}
+                                <span class="icon-badge icon-instagram" title="{{ adv.instagram }}"><i class="fab fa-instagram"></i></span>
+                            {% endif %}
+                            {% if adv.facebook %}
+                                <span class="icon-badge icon-facebook" title="{{ adv.facebook }}"><i class="fab fa-facebook"></i></span>
+                            {% endif %}
+                            {% if adv.linkedin %}
+                                <span class="icon-badge icon-linkedin" title="{{ adv.linkedin }}"><i class="fab fa-linkedin"></i></span>
+                            {% endif %}
+                            {% if not adv.tem_site %}
+                                <span class="icon-badge icon-nosite" title="Sem site!"><i class="fas fa-globe"></i>✗</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if adv.google_avaliacao %}
+                            <span class="google-rating">{{ adv.google_avaliacao }}⭐ ({{ adv.google_reviews or 0 }})</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="status-badge status-{{ adv.status }}">{{ adv.status | capitalize }}</span>
+                    </td>
+                    <td>
+                        <div class="action-btns" onclick="event.stopPropagation()">
+                            <a href="/advogado/{{ adv.id }}" class="btn-icon" title="Ver detalhes">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            {% if adv.email %}
+                            <button class="btn-icon btn-email" title="Enviar email" 
+                                    onclick="enviarEmail({{ adv.id }})">
+                                <i class="fas fa-envelope"></i>
+                            </button>
+                            {% endif %}
+                            {% if adv.whatsapp or adv.telefone %}
+                            <button class="btn-icon btn-whatsapp" title="Enviar WhatsApp"
+                                    onclick="enviarWhatsApp({{ adv.id }})">
+                                <i class="fab fa-whatsapp"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+
+                {% if not advogados %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted" style="padding: 40px;">
+                        <i class="fas fa-search" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                        <p>Nenhum advogado encontrado com esses filtros.</p>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginação -->
+    {% if total_paginas > 1 %}
+    <div class="pagination">
+        {% if pagina > 1 %}
+            <a href="?p={{ pagina - 1 }}&q={{ busca }}&status={{ filtro_status }}&estado={{ filtro_estado }}&area={{ filtro_area }}&score_min={{ filtro_score_min }}" class="btn btn-ghost">
+                <i class="fas fa-chevron-left"></i> Anterior
+            </a>
+        {% endif %}
+
+        <span class="page-info">Página {{ pagina }} de {{ total_paginas }}</span>
+
+        {% if pagina < total_paginas %}
+            <a href="?p={{ pagina + 1 }}&q={{ busca }}&status={{ filtro_status }}&estado={{ filtro_estado }}&area={{ filtro_area }}&score_min={{ filtro_score_min }}" class="btn btn-ghost">
+                Próxima <i class="fas fa-chevron-right"></i>
+            </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function enviarEmail(id) {
+    if (!confirmar('Enviar email de primeiro contato para este advogado?')) return;
+
+    const data = await apiCall(`/api/advogado/${id}/email`, {
+        method: 'POST',
+        body: JSON.stringify({ tipo: 'primeiro_contato' }),
+    });
+
+    if (data) {
+        showToast('Email enviado com sucesso!', 'success');
+    }
+}
+
+async function enviarWhatsApp(id) {
+    if (!confirmar('Enviar WhatsApp de primeiro contato?')) return;
+
+    const data = await apiCall(`/api/advogado/${id}/whatsapp`, {
+        method: 'POST',
+        body: JSON.stringify({ tipo: 'primeiro_contato' }),
+    });
+
+    if (data) {
+        showToast('WhatsApp enviado/agendado!', 'success');
+    }
+}
+</script>
+{% endblock %}
