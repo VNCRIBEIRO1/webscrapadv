@@ -1562,6 +1562,7 @@ def api_stats():
     stats = {
         "total_leads": db.execute("SELECT COUNT(*) FROM advogados").fetchone()[0],
         "sem_site": db.execute("SELECT COUNT(*) FROM advogados WHERE tem_site = 0").fetchone()[0],
+        "com_linkedin": db.execute("SELECT COUNT(*) FROM advogados WHERE linkedin IS NOT NULL AND linkedin != ''").fetchone()[0],
         "novos": db.execute("SELECT COUNT(*) FROM advogados WHERE status = 'novo'").fetchone()[0],
         "contatados": db.execute("SELECT COUNT(*) FROM advogados WHERE status = 'contatado'").fetchone()[0],
         "interessados": db.execute("SELECT COUNT(*) FROM advogados WHERE status = 'interessado'").fetchone()[0],

@@ -15,10 +15,11 @@ Fluxo por registro:
 1. Google Custom Search API (q="advogado" + nome + "telefone")
 2. Se tem site nos resultados -> scrape email + fone (requests + BeautifulSoup / Selenium fallback)
 3. Se NAO tem site -> Domain brute-force (.adv.br, .com.br)
-4. CNPJ lookup via BrasilAPI
-5. Validacao: formato telefone BR, MX email, WhatsApp check
-6. Flag: contact_ok = (valid_phone OR valid_email)
-7. Salvar no banco + exportar CSV
+4. LinkedIn Search -> encontra perfil via Google, extrai dados publicos
+5. CNPJ lookup via BrasilAPI
+6. Validacao: formato telefone BR, MX email, WhatsApp check
+7. Flag: contact_ok = (valid_phone OR valid_email)
+8. Salvar no banco + exportar CSV
 
 Anti-bloqueio:
 - Max 5 requests concorrentes por IP
@@ -383,7 +384,241 @@ def scrape_site(url, session_mgr=None, use_selenium=False, driver=None):
 
 
 # ============================================================
-# 3. PIPELINE PRINCIPAL
+# 3. LINKEDIN SEARCH & SCRAPE
+# ============================================================
+
+def buscar_linkedin(nome, oab_num=None, cidade=None, session_mgr=None):
+    """
+    Busca perfil LinkedIn do advogado via Google Custom Search ou scraping.
+    LinkedIn bloqueia scraping direto — usamos Google como proxy.
+
+    Returns:
+        dict: {url, nome, headline, localidade, sobre, email, telefone, escritorio}
+        ou None se nao encontrado
+    """
+    if session_mgr is None:
+        session_mgr = SessionManager()
+
+    logger.info(f"  [LinkedIn] Buscando perfil de {nome}...")
+
+    # Queries otimizadas para encontrar perfil LinkedIn
+    queries_linkedin = [
+        f'site:linkedin.com/in "{nome}" advogado',
+        f'site:linkedin.com/in "{nome}" OAB',
+    ]
+    if cidade:
+        queries_linkedin.insert(0, f'site:linkedin.com/in "{nome}" advogado {cidade}')
+
+    linkedin_url = None
+
+    for query in queries_linkedin:
+        session_mgr.human_delay(0.8, 1.5)
+
+        # Tentar Google CSE API
+        if GOOGLE_CSE_KEY and GOOGLE_CSE_CX:
+            results = google_custom_search(query)
+        else:
+            results = google_search_fallback(query, session_mgr)
+
+        if not results:
+            continue
+
+        for item in results:
+            link = item.get("link", "")
+            if "linkedin.com/in/" in link.lower():
+                linkedin_url = link
+                break
+
+        if linkedin_url:
+            break
+
+    if not linkedin_url:
+        logger.debug(f"  [LinkedIn] Perfil nao encontrado para {nome}")
+        return None
+
+    logger.info(f"  [LinkedIn] Perfil encontrado: {linkedin_url}")
+
+    # Scrape do perfil publico
+    return scrape_linkedin_profile(linkedin_url, nome, session_mgr)
+
+
+def scrape_linkedin_profile(url, nome_esperado=None, session_mgr=None):
+    """
+    Extrai dados publicos de um perfil LinkedIn.
+    LinkedIn mostra dados limitados sem login, mas o suficiente.
+
+    Dados extraidos:
+    - Nome completo
+    - Headline (cargo + escritorio)
+    - Localidade
+    - Sobre/resumo
+    - Escritorio (se mencionado)
+    - Email (raro, mas pode aparecer no "Sobre")
+    - Telefone (raro, mas pode aparecer no "Sobre")
+    - Areas de atuacao (do headline/sobre)
+
+    Returns:
+        dict com dados extraidos
+    """
+    if session_mgr is None:
+        session_mgr = SessionManager()
+
+    resultado = {
+        "url": url,
+        "nome": "",
+        "headline": "",
+        "localidade": "",
+        "sobre": "",
+        "escritorio": "",
+        "email": None,
+        "telefone": None,
+        "areas_atuacao": [],
+    }
+
+    try:
+        headers = session_mgr.get_headers(referer="https://www.google.com.br/")
+        # LinkedIn precisa de headers especificos
+        headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+        resp = requests.get(
+            url, headers=headers, timeout=(5, 15),
+            allow_redirects=True, verify=True,
+        )
+
+        if resp.status_code == 999:
+            logger.debug("  [LinkedIn] Bloqueado (status 999) — precisa Selenium")
+            # Tentar com Selenium stealth
+            html = scrape_com_selenium(url)
+            if not html:
+                return resultado
+        elif resp.status_code >= 400:
+            logger.debug(f"  [LinkedIn] Status {resp.status_code}")
+            return resultado
+        else:
+            html = resp.text
+
+        soup = BeautifulSoup(html, "html.parser")
+        text = soup.get_text(separator=" ", strip=True)
+        text_lower = text.lower()
+
+        # === Nome ===
+        # Meta tag og:title costuma ter: "Nome - Cargo - LinkedIn"
+        og_title = soup.find("meta", property="og:title")
+        if og_title and og_title.get("content"):
+            title_parts = og_title["content"].split(" - ")
+            resultado["nome"] = title_parts[0].strip()
+            if len(title_parts) >= 2:
+                resultado["headline"] = title_parts[1].strip()
+
+        # Fallback: tag title
+        if not resultado["nome"] and soup.title:
+            title_parts = soup.title.string.split(" - ") if soup.title.string else []
+            if title_parts:
+                resultado["nome"] = title_parts[0].strip()
+                if len(title_parts) >= 2:
+                    resultado["headline"] = title_parts[1].strip()
+
+        # === Meta description (costuma ter resumo) ===
+        og_desc = soup.find("meta", property="og:description")
+        if og_desc and og_desc.get("content"):
+            resultado["sobre"] = og_desc["content"].strip()[:500]
+
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        if not resultado["sobre"] and meta_desc and meta_desc.get("content"):
+            resultado["sobre"] = meta_desc["content"].strip()[:500]
+
+        # === Localidade ===
+        # LinkedIn meta tags ou texto
+        geo_tag = soup.find("meta", attrs={"name": "geo.placename"})
+        if geo_tag and geo_tag.get("content"):
+            resultado["localidade"] = geo_tag["content"]
+
+        if not resultado["localidade"]:
+            # Procurar no texto: "Cidade, Estado, Brasil"
+            loc_match = re.search(
+                r"([A-Z][a-záéíóúàãõê]+(?:\s+[A-Z][a-záéíóúàãõê]+)*),\s*"
+                r"([A-Z][a-záéíóúàãõê]+(?:\s+[A-Za-záéíóúàãõê]+)*),\s*Brasil",
+                text
+            )
+            if loc_match:
+                resultado["localidade"] = f"{loc_match.group(1)}, {loc_match.group(2)}"
+
+        # === Escritorio (do headline ou sobre) ===
+        headline_lower = resultado["headline"].lower()
+        sobre_lower = resultado["sobre"].lower()
+
+        # Patterns: "Socio em XYZ Advogados", "Advogado no Escritorio ABC"
+        patterns_escritorio = [
+            r"(?:s[oó]cio|advogad[oa]|associad[oa]|partner|of counsel|estagi[aá]ri[oa])\s+"
+            r"(?:em|no|na|at|@)\s+([A-ZÀ-Ú][\w\s&,.-]+(?:Advogad[oa]s?|Advocacia|Associados|Law))",
+            r"([A-ZÀ-Ú][\w\s&.-]+(?:Advogad[oa]s?|Advocacia|Associados))",
+        ]
+        for pat in patterns_escritorio:
+            match = re.search(pat, resultado["headline"] + " " + resultado["sobre"], re.IGNORECASE)
+            if match:
+                esc = match.group(1).strip()
+                # Limpar lixo no final
+                esc = re.sub(r"[\s|·•]+$", "", esc)
+                if len(esc) >= 5 and len(esc) <= 80:
+                    resultado["escritorio"] = esc
+                    break
+
+        # === Email no texto ===
+        emails_texto = re.findall(
+            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.(?:adv\.br|com\.br|com)",
+            text
+        )
+        filtro = ["linkedin", "example", "noreply", "sentry", "gstatic"]
+        for em in emails_texto:
+            if not any(f in em.lower() for f in filtro):
+                resultado["email"] = em.lower()
+                break
+
+        # === Telefone no texto ===
+        telefones = re.findall(r"\(?\d{2}\)?\s*\d{4,5}[-.]?\d{4}", text)
+        if telefones:
+            resultado["telefone"] = telefones[0]
+
+        # === Areas de atuacao ===
+        MAPEAMENTO_AREAS = {
+            "trabalhist": "Direito Trabalhista",
+            "criminal": "Direito Criminal",
+            "penal": "Direito Criminal",
+            "civil": "Direito Civil",
+            "consumidor": "Direito do Consumidor",
+            "empresarial": "Direito Empresarial",
+            "societari": "Direito Empresarial",
+            "tributari": "Direito Tributario",
+            "familia": "Direito de Familia",
+            "previdenciari": "Direito Previdenciario",
+            "imobiliari": "Direito Imobiliario",
+            "ambiental": "Direito Ambiental",
+            "digital": "Direito Digital",
+            "compliance": "Compliance",
+            "bancari": "Direito Bancario",
+            "contratual": "Direito Civil",
+        }
+        combined_text = (headline_lower + " " + sobre_lower).lower()
+        for kw, area in MAPEAMENTO_AREAS.items():
+            if kw in combined_text and area not in resultado["areas_atuacao"]:
+                resultado["areas_atuacao"].append(area)
+
+        logger.info(f"  [LinkedIn] Extraido: {resultado['nome']} | {resultado['headline'][:50]}")
+        if resultado["escritorio"]:
+            logger.info(f"  [LinkedIn] Escritorio: {resultado['escritorio']}")
+        if resultado["email"]:
+            logger.info(f"  [LinkedIn] Email: {resultado['email']}")
+        if resultado["telefone"]:
+            logger.info(f"  [LinkedIn] Telefone: {resultado['telefone']}")
+
+    except Exception as e:
+        logger.debug(f"  [LinkedIn] Erro scraping {url}: {e}")
+
+    return resultado
+
+
+# ============================================================
+# 4. PIPELINE PRINCIPAL
 # ============================================================
 
 def processar_advogado(nome, oab_num, session_mgr, batch_stats, use_selenium=False, driver=None):
@@ -429,7 +664,7 @@ def processar_advogado(nome, oab_num, session_mgr, batch_stats, use_selenium=Fal
     # ============================================
     # ETAPA 1: Google Custom Search API
     # ============================================
-    logger.info(f"  [1/5] Google Custom Search...")
+    logger.info(f"  [1/6] Google Custom Search...")
 
     queries = [
         f'"advogado" "{nome}" "telefone"',
@@ -476,7 +711,7 @@ def processar_advogado(nome, oab_num, session_mgr, batch_stats, use_selenium=Fal
     # ETAPA 2: Se tem site -> scrape contatos
     # ============================================
     if site_url:
-        logger.info(f"  [2/5] Scraping contatos de {site_url}...")
+        logger.info(f"  [2/6] Scraping contatos de {site_url}...")
         resultado["has_website"] = 1
         resultado["site"] = site_url
 
@@ -529,7 +764,7 @@ def processar_advogado(nome, oab_num, session_mgr, batch_stats, use_selenium=Fal
     # ETAPA 3: Se NAO tem site -> domain brute-force
     # ============================================
     if not site_url:
-        logger.info(f"  [2/5] Sem site no Google. Domain brute-force...")
+        logger.info(f"  [2/6] Sem site no Google. Domain brute-force...")
 
         # Inferir nome do escritorio a partir do nome do advogado
         partes_nome = nome.split()
@@ -577,10 +812,78 @@ def processar_advogado(nome, oab_num, session_mgr, batch_stats, use_selenium=Fal
             logger.info(f"  Sem site confirmado (oportunidade de prospeccao)")
 
     # ============================================
-    # ETAPA 4: CNPJ lookup
+    # ETAPA 4: LinkedIn Search
+    # ============================================
+    logger.info(f"  [3/6] LinkedIn Search...")
+    session_mgr.human_delay(0.5, 1.5)
+
+    linkedin_data = buscar_linkedin(
+        nome=nome,
+        oab_num=oab_num,
+        cidade=None,
+        session_mgr=session_mgr,
+    )
+
+    if linkedin_data:
+        # LinkedIn URL
+        if linkedin_data.get("url") and not resultado["linkedin"]:
+            resultado["linkedin"] = linkedin_data["url"]
+
+        # Email do LinkedIn (raro mas valioso)
+        if linkedin_data.get("email") and not resultado["email"]:
+            resultado["email"] = linkedin_data["email"]
+            resultado["fonte"] = resultado.get("fonte", "") or "linkedin"
+            logger.info(f"  [LinkedIn] Email preenchido: {resultado['email']}")
+
+        # Telefone do LinkedIn
+        if linkedin_data.get("telefone") and not resultado["telefone_full"]:
+            resultado["telefone_full"] = linkedin_data["telefone"]
+            logger.info(f"  [LinkedIn] Telefone preenchido: {resultado['telefone_full']}")
+
+        # Escritorio do LinkedIn (util para prospeccao)
+        if linkedin_data.get("escritorio"):
+            logger.info(f"  [LinkedIn] Escritorio detectado: {linkedin_data['escritorio']}")
+            # Se nao tinha site, tentar brute-force com nome do escritorio do LinkedIn
+            if not resultado["has_website"] and not site_url:
+                esc_linkedin = linkedin_data["escritorio"]
+                logger.info(f"  [LinkedIn] Tentando brute-force com escritorio: {esc_linkedin}")
+                verificacao2 = verificar_site_completo(nome, esc_linkedin)
+                if verificacao2["tem_site"]:
+                    resultado["has_website"] = 1
+                    resultado["site"] = verificacao2["site_url"]
+                    resultado["fonte"] = "linkedin_brute_force"
+                    logger.info(f"  [LinkedIn->BF] Site encontrado: {resultado['site']}")
+                    # Scrape contatos do site
+                    contatos2 = scrape_site(resultado["site"], session_mgr, use_selenium, driver)
+                    if contatos2:
+                        if not resultado["telefone_full"] and contatos2.get("telefones"):
+                            for tel in contatos2["telefones"]:
+                                if tel["validacao"]["valido"]:
+                                    resultado["telefone_full"] = tel["validacao"]["numero_full"]
+                                    break
+                        if not resultado["email"] and contatos2.get("emails"):
+                            for em in contatos2["emails"]:
+                                if em["validacao"]["valido"]:
+                                    resultado["email"] = em["email"]
+                                    break
+                        if not resultado["endereco"] and contatos2.get("endereco"):
+                            resultado["endereco"] = contatos2["endereco"]
+
+        # Areas do LinkedIn (complementar)
+        if linkedin_data.get("areas_atuacao") and not resultado["areas_atuacao"]:
+            resultado["areas_atuacao"] = json.dumps(linkedin_data["areas_atuacao"])
+
+        # Localidade como fallback de endereco
+        if linkedin_data.get("localidade") and not resultado["endereco"]:
+            resultado["endereco"] = linkedin_data["localidade"]
+
+        batch_stats["linkedin_encontrado"] = batch_stats.get("linkedin_encontrado", 0) + 1
+
+    # ============================================
+    # ETAPA 5: CNPJ lookup
     # ============================================
     if not resultado["cnpj"]:
-        logger.info(f"  [3/5] Buscando CNPJ...")
+        logger.info(f"  [4/6] Buscando CNPJ...")
         session_mgr.human_delay(0.5, 1.0)
 
         cnpj_data = buscar_cnpj_por_nome(nome)
@@ -597,9 +900,9 @@ def processar_advogado(nome, oab_num, session_mgr, batch_stats, use_selenium=Fal
             logger.debug(f"  CNPJ nao encontrado")
 
     # ============================================
-    # ETAPA 5: Validacao de contatos
+    # ETAPA 6: Validacao de contatos
     # ============================================
-    logger.info(f"  [4/5] Validando contatos...")
+    logger.info(f"  [5/6] Validando contatos...")
 
     validacao = validar_contato_completo(
         telefone=resultado["telefone_full"],
@@ -617,9 +920,10 @@ def processar_advogado(nome, oab_num, session_mgr, batch_stats, use_selenium=Fal
     # contact_ok (pelo menos 1 canal valido)
     contact_ok = validacao["contact_ok"]
 
-    logger.info(f"  [5/5] Resultado: site={'SIM' if resultado['has_website'] else 'NAO'} "
+    logger.info(f"  [6/6] Resultado: site={'SIM' if resultado['has_website'] else 'NAO'} "
                 f"tel={'OK' if resultado['valid_phone'] else 'X'} "
                 f"email={'OK' if resultado['valid_email'] else 'X'} "
+                f"linkedin={'SIM' if resultado['linkedin'] else 'NAO'} "
                 f"contato={'OK' if contact_ok else 'X'}")
 
     # Atualizar stats
@@ -824,6 +1128,7 @@ def executar_pipeline(
     logger.info("=" * 70)
     logger.info(f"Total processados: {batch_stats['processados']}/{total}")
     logger.info(f"Com site: {batch_stats['com_site']} ({batch_stats['com_site']/max(batch_stats['processados'],1)*100:.0f}%)")
+    logger.info(f"LinkedIn encontrado: {batch_stats.get('linkedin_encontrado', 0)} ({batch_stats.get('linkedin_encontrado',0)/max(batch_stats['processados'],1)*100:.0f}%)")
     logger.info(f"Telefone valido: {batch_stats['telefone_valido']} ({batch_stats['telefone_valido']/max(batch_stats['processados'],1)*100:.0f}%)")
     logger.info(f"Email valido: {batch_stats['email_valido']} ({batch_stats['email_valido']/max(batch_stats['processados'],1)*100:.0f}%)")
     logger.info(f"Contato OK: {batch_stats['contact_ok']} ({batch_stats['contact_ok']/max(batch_stats['processados'],1)*100:.0f}%)")
