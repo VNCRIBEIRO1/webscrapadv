@@ -88,7 +88,13 @@
                         <div class="info-item">
                             <span class="info-label"><i class="fas fa-globe"></i> Site</span>
                             <span class="info-value {{ 'text-danger' if not adv.tem_site }}">
-                                {{ '❌ SEM SITE' if not adv.tem_site else adv.site_url }}
+                                {% if adv.tem_site and adv.site_url %}
+                                    <a href="{{ adv.site_url }}" target="_blank" rel="noopener">{{ adv.site_url }}</a>
+                                {% elif adv.tem_site %}
+                                    ✅ Possui site
+                                {% else %}
+                                    ❌ SEM SITE — oportunidade de prospecção
+                                {% endif %}
                             </span>
                         </div>
                         <div class="info-item">

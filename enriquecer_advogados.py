@@ -729,7 +729,7 @@ def calcular_score(adv):
 
     # Porte do escritorio (+10)
     porte = d.get("porte_escritorio", "")
-    if porte in ("Pequeno", "Medio"):
+    if porte in ("Pequeno", "Medio", "Médio"):
         score += 10
     elif porte == "Solo":
         score += 5

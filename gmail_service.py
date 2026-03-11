@@ -24,7 +24,7 @@ SCOPES = [
 ]
 
 CREDENTIALS_FILE = "credentials.json"
-REDIRECT_URI = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:5000/oauth2callback")
+REDIRECT_URI = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:5050/oauth2callback")
 
 # Armazena flows em andamento
 _flows_pendentes = {}

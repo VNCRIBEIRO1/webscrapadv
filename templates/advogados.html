@@ -129,7 +129,9 @@
                                 <span class="icon-badge icon-linkedin" title="{{ adv.linkedin }}"><i class="fab fa-linkedin"></i></span>
                             {% endif %}
                             {% if not adv.tem_site %}
-                                <span class="icon-badge icon-nosite" title="Sem site!"><i class="fas fa-globe"></i>✗</span>
+                                <span class="icon-badge icon-nosite" title="Sem site — oportunidade!"><i class="fas fa-globe"></i>✗</span>
+                            {% else %}
+                                <span class="icon-badge" title="{{ adv.site_url or 'Possui site' }}" style="color: var(--success);"><i class="fas fa-globe"></i>✓</span>
                             {% endif %}
                         </div>
                     </td>

@@ -275,7 +275,7 @@ def calcular_score(adv):
 
     # Porte do escritório (+10)
     porte = adv.get("porte_escritorio") if isinstance(adv, dict) else adv[29]
-    if porte in ("Pequeno", "Médio"):
+    if porte in ("Pequeno", "Médio", "Medio"):
         score += 10
     elif porte == "Solo":
         score += 5
@@ -1569,22 +1569,11 @@ def seed_exemplo():
     db.commit()
 
     # Calcular scores
+    db.row_factory = sqlite3.Row
     rows = db.execute("SELECT * FROM advogados").fetchall()
     for row in rows:
-        row_dict = {
-            "tem_site": row[14],
-            "instagram": row[16],
-            "facebook": row[18],
-            "linkedin": row[20],
-            "google_avaliacao": row[22],
-            "google_reviews": row[23],
-            "tempo_atuacao": row[26],
-            "volume_processos": row[27],
-            "porte_escritorio": row[29],
-            "areas_atuacao": row[24],
-        }
-        score = calcular_score(row_dict)
-        db.execute("UPDATE advogados SET score_potencial = ? WHERE id = ?", (score, row[0]))
+        score = calcular_score(dict(row))
+        db.execute("UPDATE advogados SET score_potencial = ? WHERE id = ?", (score, row["id"]))
 
     db.commit()
     db.close()
@@ -1597,4 +1586,4 @@ seed_exemplo()
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    app.run(debug=True, port=5050, host="0.0.0.0", use_reloader=False)
